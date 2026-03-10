@@ -75,6 +75,11 @@ function battle_ledger_check_requirements() {
         }
     }
 
+    // WooCommerce required
+    if (!class_exists('WooCommerce')) {
+        $errors[] = '<strong>WooCommerce</strong> plugin must be installed and activated. BattleLedger requires WooCommerce for payments, wallet deposits, and tournament entries.';
+    }
+
     // Vite build assets
     $manifest = BATTLE_LEDGER_PLUGIN_DIR . 'assets/.vite/manifest.json';
     if (!file_exists($manifest)) {
@@ -132,6 +137,17 @@ function battle_ledger_admin_requirement_notice() {
     <?php
 }
 add_action('admin_notices', 'battle_ledger_admin_requirement_notice');
+
+/**
+ * Add "Dashboard" action link to the plugins list page.
+ */
+function battle_ledger_plugin_action_links($links) {
+    $dashboard_url = admin_url('admin.php?page=battle-ledger');
+    $dashboard_link = '<a href="' . esc_url($dashboard_url) . '" style="font-weight:600;">Dashboard</a>';
+    array_unshift($links, $dashboard_link);
+    return $links;
+}
+add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'battle_ledger_plugin_action_links');
 
 // Require Composer autoloader if it exists
 if (file_exists(BATTLE_LEDGER_PLUGIN_DIR . 'vendor/autoload.php')) {
