@@ -112,6 +112,8 @@ class Shortcodes {
             'isLoggedIn'=> is_user_logged_in(),
             'loginUrl'  => $login_url ?: wp_login_url(get_permalink()),
             'userId'    => $current_user->ID ?? 0,
+            'currency'  => \BattleLedger\Wallet\WalletManager::get_currency(),
+            'currencySymbol' => \BattleLedger\Wallet\WalletManager::get_currency_symbol(),
         ];
 
         // Generate CSS variables from admin appearance settings

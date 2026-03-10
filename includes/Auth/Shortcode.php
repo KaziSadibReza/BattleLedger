@@ -194,6 +194,8 @@ class Shortcode {
         
         $props['nonce'] = Security::create_nonce();
         $props['apiUrl'] = rest_url();
+        $props['currency'] = \BattleLedger\Wallet\WalletManager::get_currency();
+        $props['currencySymbol'] = \BattleLedger\Wallet\WalletManager::get_currency_symbol();
         
         // Add form settings for consistent colors
         $form_settings = self::get_form_settings();
@@ -293,6 +295,8 @@ class Shortcode {
         
         $props['nonce'] = Security::create_nonce();
         $props['apiUrl'] = rest_url('battle-ledger/v1/auth');
+        $props['currency'] = \BattleLedger\Wallet\WalletManager::get_currency();
+        $props['currencySymbol'] = \BattleLedger\Wallet\WalletManager::get_currency_symbol();
         
         // Add form customization settings
         $form_settings = self::get_form_settings();
