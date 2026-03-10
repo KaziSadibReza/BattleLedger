@@ -2,6 +2,16 @@
 node_modules/
 vendor/
 
+# Source / Dev files (production uses built assets only)
+src/
+package.json
+pnpm-lock.yaml
+vite.config.ts
+tsconfig.json
+tsconfig.node.json
+API-ENDPOINTS.md
+.github/
+
 # Environment / IDE
 .env
 .vscode/
@@ -19,6 +29,3 @@ _diag.php
 
 # Logs
 *.log
-
-# Lock files (optional - remove these lines if you want to pin deps)
-# pnpm-lock.yaml
