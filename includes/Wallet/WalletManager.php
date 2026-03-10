@@ -32,6 +32,35 @@ class WalletManager {
     const TYPE_DEPOSIT_PENDING = 'deposit_pending';
     
     /**
+     * Get the active currency code from WooCommerce.
+     */
+    public static function get_currency(): string {
+        return function_exists('get_woocommerce_currency')
+            ? get_woocommerce_currency()
+            : get_option('woocommerce_currency', 'USD');
+    }
+
+    /**
+     * Format a price using WooCommerce (with symbol + decimals) or plain fallback.
+     */
+    public static function format_price(float $amount): string {
+        if (function_exists('wc_price')) {
+            return html_entity_decode(strip_tags(wc_price($amount)), ENT_QUOTES, 'UTF-8');
+        }
+        return self::get_currency_symbol() . number_format($amount, 2);
+    }
+
+    /**
+     * Get the currency symbol.
+     */
+    public static function get_currency_symbol(): string {
+        if (function_exists('get_woocommerce_currency_symbol')) {
+            return html_entity_decode(get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8');
+        }
+        return '$';
+    }
+
+    /**
      * Get instance
      */
     public static function instance() {
@@ -62,7 +91,7 @@ class WalletManager {
             $wpdb->insert($table, [
                 'user_id' => $user_id,
                 'balance' => 0.00,
-                'currency' => get_option('woocommerce_currency', 'USD'),
+                'currency' => self::get_currency(),
                 'status' => 'active',
                 'created_at' => current_time('mysql'),
                 'updated_at' => current_time('mysql'),
@@ -566,7 +595,7 @@ class WalletManager {
             'today_transactions' => (int) $today_transactions,
             'today_credits' => floatval($today_credits),
             'today_debits' => floatval($today_debits),
-            'currency' => get_option('woocommerce_currency', 'USD'),
+            'currency' => self::get_currency(),
         ];
     }
     

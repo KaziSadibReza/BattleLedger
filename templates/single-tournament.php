@@ -77,7 +77,7 @@ $participants_count = $participants_query->where('tournament_id', $tournament_id
                 <div class="bl-detail-item">
                     <span class="bl-detail-label"><?php esc_html_e('Entry Fee:', 'battle-ledger'); ?></span>
                     <span class="bl-detail-value">
-                        <?php echo wc_price($tournament->entry_fee); ?>
+                        <?php echo function_exists('wc_price') ? wc_price($tournament->entry_fee) : esc_html('$' . number_format($tournament->entry_fee, 2)); ?>
                     </span>
                 </div>
             <?php endif; ?>
@@ -86,7 +86,7 @@ $participants_count = $participants_query->where('tournament_id', $tournament_id
                 <div class="bl-detail-item">
                     <span class="bl-detail-label"><?php esc_html_e('Prize Pool:', 'battle-ledger'); ?></span>
                     <span class="bl-detail-value">
-                        <?php echo wc_price($tournament->prize_pool); ?>
+                        <?php echo function_exists('wc_price') ? wc_price($tournament->prize_pool) : esc_html('$' . number_format($tournament->prize_pool, 2)); ?>
                     </span>
                 </div>
             <?php endif; ?>

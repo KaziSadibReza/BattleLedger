@@ -269,10 +269,7 @@ class WalletController {
         $wallet = WalletManager::get_wallet($user_id);
         
         // Get WooCommerce currency
-        $currency = 'USD';
-        if (function_exists('get_woocommerce_currency')) {
-            $currency = get_woocommerce_currency();
-        }
+        $currency = WalletManager::get_currency();
         
         // Calculate frozen amount (pending withdrawals)
         $frozen = self::get_pending_withdrawal_total($user_id);
@@ -384,7 +381,7 @@ class WalletController {
         
         return rest_ensure_response([
             'success' => true,
-            'message' => sprintf(__('Successfully added %s to wallet', 'battle-ledger'), function_exists('wc_price') ? wc_price($amount) : number_format($amount, 2)),
+            'message' => sprintf(__('Successfully added %s to wallet', 'battle-ledger'), WalletManager::format_price($amount)),
             'new_balance' => $result['new_balance'],
             'transaction_id' => $result['transaction_id'],
         ]);
@@ -415,7 +412,7 @@ class WalletController {
         
         return rest_ensure_response([
             'success' => true,
-            'message' => sprintf(__('Successfully deducted %s from wallet', 'battle-ledger'), function_exists('wc_price') ? wc_price($amount) : number_format($amount, 2)),
+            'message' => sprintf(__('Successfully deducted %s from wallet', 'battle-ledger'), WalletManager::format_price($amount)),
             'new_balance' => $result['new_balance'],
             'transaction_id' => $result['transaction_id'],
         ]);
@@ -637,7 +634,7 @@ class WalletController {
         // Notify admin
         $admin_email = get_option('admin_email');
         $user = get_userdata($user_id);
-        $currency = function_exists('get_woocommerce_currency') ? get_woocommerce_currency() : 'USD';
+        $currency = WalletManager::get_currency();
 
         // In-app notification: withdrawal requested (admin)
         \BattleLedger\Core\NotificationManager::withdrawal_requested(
@@ -878,7 +875,7 @@ class WalletController {
         \BattleLedger\Core\NotificationManager::withdrawal_approved(
             (int) $row->user_id,
             floatval($row->amount),
-            function_exists('get_woocommerce_currency') ? get_woocommerce_currency() : 'USD'
+            WalletManager::get_currency()
         );
 
         return rest_ensure_response([
@@ -921,7 +918,7 @@ class WalletController {
         \BattleLedger\Core\NotificationManager::withdrawal_rejected(
             (int) $row->user_id,
             floatval($row->amount),
-            function_exists('get_woocommerce_currency') ? get_woocommerce_currency() : 'USD',
+            WalletManager::get_currency(),
             $note
         );
         

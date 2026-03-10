@@ -39,7 +39,7 @@ class DashboardController {
         // Get wallet balance
         $wallet = WalletManager::get_wallet($user_id);
         $wallet_balance = $wallet ? floatval($wallet->balance) : 0;
-        $currency = $wallet ? $wallet->currency : get_option('woocommerce_currency', 'USD');
+        $currency = $wallet ? $wallet->currency : WalletManager::get_currency();
         
         // Get tournament stats
         $tournaments_table = $wpdb->prefix . 'bl_tournament_participants';

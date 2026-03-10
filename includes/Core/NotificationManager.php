@@ -240,7 +240,8 @@ class NotificationManager {
        ══════════════════════════════════════════ */
 
     /** Wallet deposit */
-    public static function wallet_deposit(string $display_name, float $amount, string $currency = 'USD'): void {
+    public static function wallet_deposit(string $display_name, float $amount, string $currency = ''): void {
+        if ($currency === '') $currency = \BattleLedger\Wallet\WalletManager::get_currency();
         self::create('success', 'Wallet Deposit', sprintf(
             '%s deposited %s %s into their wallet.',
             $display_name,
@@ -253,7 +254,8 @@ class NotificationManager {
     }
 
     /** Withdrawal requested */
-    public static function withdrawal_requested(string $display_name, float $amount, string $currency = 'USD'): void {
+    public static function withdrawal_requested(string $display_name, float $amount, string $currency = ''): void {
+        if ($currency === '') $currency = \BattleLedger\Wallet\WalletManager::get_currency();
         self::create('alert', 'Withdrawal Requested', sprintf(
             '%s requested a withdrawal of %s %s.',
             $display_name,
@@ -266,7 +268,8 @@ class NotificationManager {
     }
 
     /** Withdrawal approved — notify the user */
-    public static function withdrawal_approved(int $user_id, float $amount, string $currency = 'USD'): void {
+    public static function withdrawal_approved(int $user_id, float $amount, string $currency = ''): void {
+        if ($currency === '') $currency = \BattleLedger\Wallet\WalletManager::get_currency();
         self::create('success', 'Withdrawal Approved', sprintf(
             'Your withdrawal of %s %s has been approved.',
             number_format($amount, 2),
@@ -280,7 +283,8 @@ class NotificationManager {
     }
 
     /** Withdrawal rejected — notify the user */
-    public static function withdrawal_rejected(int $user_id, float $amount, string $currency = 'USD', string $reason = ''): void {
+    public static function withdrawal_rejected(int $user_id, float $amount, string $currency = '', string $reason = ''): void {
+        if ($currency === '') $currency = \BattleLedger\Wallet\WalletManager::get_currency();
         $msg = sprintf(
             'Your withdrawal of %s %s was rejected.',
             number_format($amount, 2),
@@ -332,7 +336,8 @@ class NotificationManager {
        ══════════════════════════════════════════ */
 
     /** Notify user: deposit confirmed */
-    public static function user_deposit_confirmed(int $user_id, float $amount, string $currency = 'USD'): void {
+    public static function user_deposit_confirmed(int $user_id, float $amount, string $currency = ''): void {
+        if ($currency === '') $currency = \BattleLedger\Wallet\WalletManager::get_currency();
         self::create('success', 'Deposit Confirmed', sprintf(
             'Your deposit of %s %s has been credited to your wallet.',
             number_format($amount, 2),
@@ -376,7 +381,8 @@ class NotificationManager {
     }
 
     /** Notify user: withdrawal submitted confirmation */
-    public static function user_withdrawal_submitted(int $user_id, float $amount, string $currency = 'USD'): void {
+    public static function user_withdrawal_submitted(int $user_id, float $amount, string $currency = ''): void {
+        if ($currency === '') $currency = \BattleLedger\Wallet\WalletManager::get_currency();
         self::create('system', 'Withdrawal Submitted', sprintf(
             'Your withdrawal request of %s %s has been submitted and is awaiting approval.',
             number_format($amount, 2),

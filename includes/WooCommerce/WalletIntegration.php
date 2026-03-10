@@ -193,7 +193,7 @@ class WalletIntegration {
         }
         
         $subject = 'Wallet Deposit Confirmed - BattleLedger';
-        $currency = get_option('woocommerce_currency', 'USD');
+        $currency = \BattleLedger\Wallet\WalletManager::get_currency();
         
         $message = sprintf(
             "Hello %s,\n\nYour wallet deposit has been successfully completed!\n\nAmount: %s\nOrder ID: #%d\n\nYou can now use these funds for tournament entries and other activities.\n\nThank you for using BattleLedger!",

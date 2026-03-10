@@ -97,6 +97,9 @@ class Assets {
                 'pluginUrl' => BATTLE_LEDGER_PLUGIN_URL,
                 'currentUser' => wp_get_current_user()->ID,
                 'isWooCommerceActive' => class_exists('WooCommerce'),
+                'currency' => \BattleLedger\Wallet\WalletManager::get_currency(),
+                'currencySymbol' => \BattleLedger\Wallet\WalletManager::get_currency_symbol(),
+                'currencyPosition' => get_option('woocommerce_currency_pos', 'left'),
                 'isDev' => true,
             ]);
         } else {
@@ -131,6 +134,9 @@ class Assets {
                         'pluginUrl' => BATTLE_LEDGER_PLUGIN_URL,
                         'currentUser' => wp_get_current_user()->ID,
                         'isWooCommerceActive' => class_exists('WooCommerce'),
+                        'currency' => \BattleLedger\Wallet\WalletManager::get_currency(),
+                        'currencySymbol' => \BattleLedger\Wallet\WalletManager::get_currency_symbol(),
+                        'currencyPosition' => get_option('woocommerce_currency_pos', 'left'),
                         'isDev' => false,
                     ]);
                 }

@@ -150,13 +150,13 @@ if (!is_user_logged_in()) {
                         <?php if ($t->entry_fee > 0): ?>
                             <div class="bl-live-ft-stat">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                                <span><?php echo esc_html(number_format($t->entry_fee, 2)); ?></span>
+                                <span><?php echo function_exists('wc_price') ? wp_kses_post(wc_price($t->entry_fee)) : esc_html('$' . number_format($t->entry_fee, 2)); ?></span>
                             </div>
                         <?php endif; ?>
                         <?php if ($t->prize_pool > 0): ?>
                             <div class="bl-live-ft-stat bl-live-ft-stat-prize">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-                                <span>$<?php echo esc_html(number_format($t->prize_pool, 2)); ?></span>
+                                <span><?php echo function_exists('wc_price') ? wp_kses_post(wc_price($t->prize_pool)) : esc_html('$' . number_format($t->prize_pool, 2)); ?></span>
                             </div>
                         <?php endif; ?>
                     </div>
