@@ -44,11 +44,6 @@ class AuthSettings {
         'rate_limit_window' => 15, // minutes
         'session_duration' => 14, // days
         
-        // Redirects
-        'login_redirect' => '',
-        'logout_redirect' => '',
-        'dashboard_page' => '',
-        
         // UI Settings
         'enable_google_one_tap' => false,
         'show_password_strength' => true,
@@ -124,9 +119,6 @@ class AuthSettings {
                 
                 // URL settings
                 case 'google_redirect_uri':
-                case 'login_redirect':
-                case 'logout_redirect':
-                case 'dashboard_page':
                     $sanitized[$key] = esc_url_raw($value);
                     break;
                 
@@ -154,8 +146,7 @@ class AuthSettings {
      * Check if Google Auth is properly configured
      */
     public static function is_google_configured(): bool {
-        return self::get('google_enabled') 
-            && !empty(self::get('google_client_id'))
+        return !empty(self::get('google_client_id'))
             && !empty(self::get('google_client_secret'));
     }
     

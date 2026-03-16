@@ -456,7 +456,7 @@ class WalletPaymentController {
         
         // Security: user can only check their own orders
         $order_user_id = $order->get_meta('_wallet_user_id');
-        if (intval($order_user_id) !== $user_id && !current_user_can('manage_options')) {
+        if (intval($order_user_id) !== $user_id && !current_user_can('manage_battle_ledger')) {
             return new WP_REST_Response([
                 'success' => false,
                 'message' => 'Unauthorized',
@@ -578,6 +578,6 @@ class WalletPaymentController {
         $current_user_id = get_current_user_id();
         
         // User can access own data, or admin can access any
-        return $user_id === $current_user_id || current_user_can('manage_options');
+        return $user_id === $current_user_id || current_user_can('manage_battle_ledger');
     }
 }

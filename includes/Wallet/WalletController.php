@@ -702,7 +702,7 @@ class WalletController {
         $methods = get_option('battleledger_withdrawal_methods', []);
         
         // Non-admins only see enabled methods (hide disabled ones + admin-only fields)
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('manage_battle_ledger')) {
             $methods = array_values(array_filter($methods, function($m) {
                 return !empty($m['enabled']);
             }));

@@ -46,7 +46,7 @@ class Shortcode {
             'mode' => $atts['mode'],
             'popup' => $atts['popup'] === 'true',
             'buttonText' => $atts['button_text'],
-            'redirect' => $atts['redirect'] ?: AuthSettings::get('login_redirect', ''),
+            'redirect' => $atts['redirect'] ?: self::get_form_redirect('loginRedirect', ''),
             'className' => $atts['class'],
             'googleEnabled' => AuthSettings::is_google_configured(),
             'otpEnabled' => AuthSettings::is_otp_enabled(),
@@ -65,7 +65,7 @@ class Shortcode {
         $container_id = 'bl-login-' . wp_unique_id();
         
         return self::render_react_container($container_id, 'login', [
-            'redirect' => $atts['redirect'] ?: AuthSettings::get('login_redirect', ''),
+            'redirect' => $atts['redirect'] ?: self::get_form_redirect('loginRedirect', ''),
             'className' => $atts['class'],
             'googleEnabled' => AuthSettings::is_google_configured(),
             'otpEnabled' => AuthSettings::is_otp_enabled(),
@@ -84,7 +84,7 @@ class Shortcode {
         $container_id = 'bl-signup-' . wp_unique_id();
         
         return self::render_react_container($container_id, 'signup', [
-            'redirect' => $atts['redirect'] ?: AuthSettings::get('login_redirect', ''),
+            'redirect' => $atts['redirect'] ?: self::get_form_redirect('registrationRedirect', ''),
             'className' => $atts['class'],
             'googleEnabled' => AuthSettings::is_google_configured(),
         ]);
@@ -106,7 +106,7 @@ class Shortcode {
         return self::render_react_container($container_id, 'profile', [
             'showAvatar' => $atts['show_avatar'] === 'true',
             'showName' => $atts['show_name'] === 'true',
-            'dashboardLink' => $atts['dashboard_link'] ?: AuthSettings::get('dashboard_url', ''),
+            'dashboardLink' => $atts['dashboard_link'] ?: \BattleLedger\Core\PageInstaller::get_page_url('dashboard'),
             'className' => $atts['class'],
         ]);
     }
@@ -129,7 +129,7 @@ class Shortcode {
         
         return self::render_react_container($container_id, 'logout', [
             'text' => $atts['text'],
-            'redirect' => $atts['redirect'] ?: AuthSettings::get('logout_redirect', home_url('/')),
+            'redirect' => $atts['redirect'] ?: self::get_form_redirect('logoutRedirect', home_url('/')),
             'className' => $atts['class'],
         ]);
     }
@@ -163,7 +163,7 @@ class Shortcode {
             'addFundsLink' => $atts['add_funds_link'],
             'tournamentsLink' => $atts['tournaments_link'],
             'transactionsLink' => $atts['transactions_link'],
-            'logoutRedirect' => $atts['logout_redirect'] ?: AuthSettings::get('logout_redirect', home_url('/')),
+            'logoutRedirect' => $atts['logout_redirect'] ?: self::get_form_redirect('logoutRedirect', home_url('/')),
             'className' => $atts['class'],
         ]);
     }
@@ -353,7 +353,7 @@ class Shortcode {
             'features' => [
                 'showLogo' => false,
                 'logoUrl' => '',
-                'showSocialLogin' => false,
+                'showSocialLogin' => true,
                 'showOtpLogin' => true,
                 'showPasswordLogin' => true,
                 'defaultLoginMethod' => 'otp',
@@ -363,6 +363,19 @@ class Shortcode {
         $saved = get_option('battle_ledger_form_settings', []);
         
         return array_replace_recursive($defaults, $saved);
+    }
+    
+    /**
+     * Get a redirect URL from form customization settings
+     * 
+     * @param string $key One of: loginRedirect, logoutRedirect, registrationRedirect
+     * @param string $default Default URL if not set
+     */
+    public static function get_form_redirect(string $key, string $default = ''): string {
+        $settings = get_option('battle_ledger_form_settings', []);
+        $features = $settings['features'] ?? [];
+        $value = $features[$key] ?? '';
+        return !empty($value) ? $value : $default;
     }
     
     /**

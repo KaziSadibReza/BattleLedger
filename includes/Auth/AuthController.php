@@ -473,8 +473,8 @@ class AuthController {
         $state = $request->get_param('state');
         $error = $request->get_param('error');
         
-        $redirect_url = AuthSettings::get('login_redirect', home_url('/'));
-        $error_redirect = AuthSettings::get('logout_redirect', home_url('/'));
+        $redirect_url = Shortcode::get_form_redirect('loginRedirect', '') ?: home_url('/');
+        $error_redirect = \BattleLedger\Core\PageInstaller::get_page_url('login') ?: home_url('/');
         
         // Handle error from Google
         if ($error) {

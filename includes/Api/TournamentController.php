@@ -488,12 +488,18 @@ class TournamentController {
             return new \WP_Error('not_found', __('Tournament not found', 'battle-ledger'), ['status' => 404]);
         }
 
-        // Build sanitised winners array
+        // Build sanitised winners — supports first/second/third + place_N keys
         $winners_clean = [
             'first'  => sanitize_text_field($winners['first'] ?? ''),
             'second' => sanitize_text_field($winners['second'] ?? ''),
             'third'  => sanitize_text_field($winners['third'] ?? ''),
         ];
+        // Dynamic placements beyond 3rd
+        foreach ($winners as $key => $name) {
+            if (preg_match('/^place_(\d+)$/', $key, $m)) {
+                $winners_clean[$key] = sanitize_text_field($name);
+            }
+        }
 
         // Kill counts keyed by display_name from the request
         $kill_counts_raw = $request->get_param('kill_counts');
@@ -538,37 +544,60 @@ class TournamentController {
         $participant_count = count($participants_snapshot);
 
         // ── Prize distribution ──────────────────────────────────
-        // Winner (1st place) → prize_pool + (kills × prize_per_kill)
-        // All other participants → kills × prize_per_kill (only if prize_per_kill > 0)
+        // Build a map: display_name → placement amount
         $prize_pool   = (float) $row->prize_pool;
-        $payouts      = [];
+        $prize_dist   = $tournament_settings['prize_distribution'] ?? [];
+        $placement_map = []; // name → amount from placement
+
+        if (!empty($prize_dist) && is_array($prize_dist)) {
+            // Dynamic prize distribution configured by admin
+            foreach ($prize_dist as $pd) {
+                $place  = (int) ($pd['place'] ?? 0);
+                $amount = (float) ($pd['amount'] ?? 0);
+                if ($place <= 0 || $amount <= 0) continue;
+
+                // Resolve winner name for this placement
+                $winner_name = '';
+                if ($place === 1) $winner_name = $winners_clean['first'] ?? '';
+                elseif ($place === 2) $winner_name = $winners_clean['second'] ?? '';
+                elseif ($place === 3) $winner_name = $winners_clean['third'] ?? '';
+                else $winner_name = $winners_clean["place_{$place}"] ?? '';
+
+                if ($winner_name) {
+                    $placement_map[$winner_name] = ($placement_map[$winner_name] ?? 0) + $amount;
+                }
+            }
+        } else {
+            // Legacy: 1st place gets entire prize pool
+            if (!empty($winners_clean['first']) && $prize_pool > 0) {
+                $placement_map[$winners_clean['first']] = $prize_pool;
+            }
+        }
+
+        $payouts = [];
 
         foreach ($participants_snapshot as $p) {
             $user_id  = (int) $p['user_id'];
             $name     = $p['display_name'];
             $kills    = (int) $p['kills'];
-            $is_first = ($name === $winners_clean['first']);
 
             $total = 0;
+            $desc_parts = [];
 
-            // Winner gets prize pool
-            if ($is_first && $prize_pool > 0) {
-                $total += $prize_pool;
+            // Placement prize
+            if (isset($placement_map[$name]) && $placement_map[$name] > 0) {
+                $total += $placement_map[$name];
+                $desc_parts[] = sprintf('Placement prize $%.2f', $placement_map[$name]);
             }
 
-            // Everyone with kills gets kill prize
+            // Kill prize
             if ($prize_per_kill > 0 && $kills > 0) {
-                $total += $kills * $prize_per_kill;
+                $kill_total = $kills * $prize_per_kill;
+                $total += $kill_total;
+                $desc_parts[] = sprintf('%d kills × $%.2f = $%.2f', $kills, $prize_per_kill, $kill_total);
             }
 
             if ($total > 0 && $user_id > 0) {
-                $desc_parts = [];
-                if ($is_first && $prize_pool > 0) {
-                    $desc_parts[] = sprintf('Prize pool $%.2f', $prize_pool);
-                }
-                if ($prize_per_kill > 0 && $kills > 0) {
-                    $desc_parts[] = sprintf('%d kills × $%.2f = $%.2f', $kills, $prize_per_kill, $kills * $prize_per_kill);
-                }
                 $description = sprintf(
                     'Tournament prize: %s — %s',
                     $row->name,
@@ -669,6 +698,7 @@ class TournamentController {
         ));
 
         $participants = array_map(function ($r) {
+            $meta = json_decode($r->metadata ?? '{}', true) ?: [];
             return [
                 'id'            => (int) $r->id,
                 'tournament_id' => (int) $r->tournament_id,
@@ -680,6 +710,8 @@ class TournamentController {
                 'status'        => $r->status,
                 'rank'          => $r->rank ? (int) $r->rank : null,
                 'score'         => (float) $r->score,
+                'slots'         => (int) ($r->slots ?? 1),
+                'players'       => $meta['players'] ?? [],
                 'registered_at' => $r->registered_at,
             ];
         }, $rows ?: []);

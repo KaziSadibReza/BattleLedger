@@ -90,13 +90,13 @@ class TemplateHandler {
         }
         
         // Check settings for custom redirect
-        $custom_redirect = AuthSettings::get('login_redirect', '');
+        $custom_redirect = Shortcode::get_form_redirect('loginRedirect', '');
         if (!empty($custom_redirect) && !self::is_same_page($custom_redirect, $login_page_id)) {
             return $custom_redirect;
         }
         
         // Fallback to admin dashboard for admins, home for others
-        if (current_user_can('manage_options')) {
+        if (current_user_can('manage_battle_ledger')) {
             return admin_url();
         }
         
@@ -168,7 +168,7 @@ class TemplateHandler {
      */
     public static function get_logout_url(?string $redirect = null): string {
         if (empty($redirect)) {
-            $redirect = AuthSettings::get('logout_redirect', home_url('/'));
+            $redirect = Shortcode::get_form_redirect('logoutRedirect', home_url('/'));
         }
         
         return wp_logout_url($redirect);

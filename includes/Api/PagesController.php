@@ -72,7 +72,7 @@ class PagesController {
      * Check admin permission
      */
     public static function check_admin_permission(): bool {
-        return current_user_can('manage_options');
+        return current_user_can('manage_battle_ledger');
     }
     
     /**

@@ -50,6 +50,7 @@ class UserTournamentController {
         $tournaments_table  = $wpdb->prefix . 'bl_tournaments';
         $participants_table = $wpdb->prefix . 'bl_tournament_participants';
         $finished_table     = $wpdb->prefix . 'bl_finished_tournaments';
+        $rules_table        = $wpdb->prefix . 'bl_game_rules';
 
         $items = [];
         $total = 0;
@@ -59,13 +60,15 @@ class UserTournamentController {
             $active_rows = $wpdb->get_results($wpdb->prepare(
                 "SELECT t.*, p.registered_at AS joined_at, p.slots AS my_slots,
                         p.team_name AS my_team_name, p.metadata AS my_metadata,
-                        COALESCE(pc.cnt, 0) AS participant_count
+                        COALESCE(pc.cnt, 0) AS participant_count,
+                        gr.game_name AS rule_game_name, gr.game_icon AS rule_game_icon, gr.game_image AS rule_game_image
                  FROM $participants_table p
                  INNER JOIN $tournaments_table t ON t.id = p.tournament_id
                  LEFT JOIN (
                      SELECT tournament_id, SUM(COALESCE(slots, 1)) AS cnt
                      FROM $participants_table GROUP BY tournament_id
                  ) pc ON pc.tournament_id = t.id
+                 LEFT JOIN $rules_table gr ON gr.slug = t.game_type
                  WHERE p.user_id = %d
                  ORDER BY p.registered_at DESC",
                 $user_id
@@ -85,6 +88,9 @@ class UserTournamentController {
                     'type'              => 'active',
                     'name'              => $r->name,
                     'game_type'         => $r->game_type ?? '',
+                    'game_name'         => $r->rule_game_name ?? ($r->game_type ?? ''),
+                    'game_icon'         => $r->rule_game_icon ?? '',
+                    'game_image'        => $r->rule_game_image ?? '',
                     'status'            => $status,
                     'start_date'        => $r->start_date,
                     'end_date'          => $r->end_date,
@@ -96,10 +102,13 @@ class UserTournamentController {
                     'my_slots'          => (int) ($r->my_slots ?? 1),
                     'my_team_name'      => $r->my_team_name ?? '',
                     'settings'          => [
-                        'game_mode' => $settings['game_mode'] ?? '',
-                        'map'       => $settings['map'] ?? '',
-                        'team_mode' => $settings['team_mode'] ?? '',
+                        'game_mode'          => $settings['game_mode'] ?? '',
+                        'map'                => $settings['map'] ?? '',
+                        'team_mode'          => $settings['team_mode'] ?? '',
+                        'prize_distribution' => $settings['prize_distribution'] ?? [],
                     ],
+                    'room_id'           => $settings['room_id'] ?? '',
+                    'room_password'     => $settings['room_password'] ?? '',
                     'winners'           => null,
                     'finished_at'       => null,
                 ];
@@ -130,11 +139,20 @@ class UserTournamentController {
                 $settings = json_decode($r->settings ?? '{}', true) ?: [];
                 $winners  = json_decode($r->winners ?? '{}', true) ?: [];
 
+                // Look up game rule for finished tournament
+                $game_rule = $wpdb->get_row($wpdb->prepare(
+                    "SELECT game_name, game_icon, game_image FROM $rules_table WHERE slug = %s LIMIT 1",
+                    $r->game_type ?? ''
+                ));
+
                 $items[] = [
                     'id'                => (int) $r->id,
                     'type'              => 'finished',
                     'name'              => $r->name,
                     'game_type'         => $r->game_type ?? '',
+                    'game_name'         => $game_rule->game_name ?? ($r->game_type ?? ''),
+                    'game_icon'         => $game_rule->game_icon ?? '',
+                    'game_image'        => $game_rule->game_image ?? '',
                     'status'            => 'finished',
                     'start_date'        => $r->start_date,
                     'end_date'          => $r->end_date,
@@ -146,9 +164,10 @@ class UserTournamentController {
                     'my_slots'          => (int) ($p['slots'] ?? 1),
                     'my_team_name'      => $p['team_name'] ?? '',
                     'settings'          => [
-                        'game_mode' => $settings['game_mode'] ?? '',
-                        'map'       => $settings['map'] ?? '',
-                        'team_mode' => $settings['team_mode'] ?? '',
+                        'game_mode'          => $settings['game_mode'] ?? '',
+                        'map'                => $settings['map'] ?? '',
+                        'team_mode'          => $settings['team_mode'] ?? '',
+                        'prize_distribution' => $settings['prize_distribution'] ?? [],
                     ],
                     'winners'           => $winners,
                     'finished_at'       => $r->finished_at,

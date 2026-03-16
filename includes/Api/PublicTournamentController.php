@@ -157,11 +157,12 @@ class PublicTournamentController {
             'prize_pool'       => (float) $row->prize_pool,
             'participant_count'=> (int) ($row->participant_count ?? 0),
             'settings'         => [
-                'game_mode'      => $settings['game_mode'] ?? '',
-                'map'            => $settings['map'] ?? '',
-                'team_mode'      => $settings['team_mode'] ?? '',
-                'winners'        => $settings['winners'] ?? null,
-                'prize_per_kill' => (float) ($settings['prize_per_kill'] ?? 0),
+                'game_mode'          => $settings['game_mode'] ?? '',
+                'map'                => $settings['map'] ?? '',
+                'team_mode'          => $settings['team_mode'] ?? '',
+                'winners'            => $settings['winners'] ?? null,
+                'prize_per_kill'     => (float) ($settings['prize_per_kill'] ?? 0),
+                'prize_distribution' => $settings['prize_distribution'] ?? [],
             ],
             'created_at'       => $row->created_at,
         ];
@@ -313,6 +314,12 @@ class PublicTournamentController {
                 $id, $user_id
             ));
             $tournament['is_joined'] = (bool) $joined;
+
+            // Expose room credentials only to joined users
+            if ($joined) {
+                $tournament['room_id']       = $settings['room_id'] ?? '';
+                $tournament['room_password'] = $settings['room_password'] ?? '';
+            }
         }
 
         return rest_ensure_response([

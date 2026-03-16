@@ -26,7 +26,7 @@ class Menu {
         add_menu_page(
             __('BattleLedger', 'battle-ledger'),
             __('BattleLedger', 'battle-ledger'),
-            'manage_options',
+            'manage_battle_ledger',
             'battle-ledger',
             [$this, 'render_admin_page'],
             $this->get_menu_icon(),

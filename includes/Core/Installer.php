@@ -13,6 +13,9 @@ class Installer {
      * Called on admin_init to auto-create new tables without deactivation.
      */
     public static function maybe_upgrade() {
+        // Ensure required capabilities exist for all supported roles on every init.
+        self::create_capabilities();
+
         $current = get_option('battle_ledger_db_version', '0');
         if (version_compare($current, self::DB_VERSION, '<')) {
             self::create_tables();
@@ -91,11 +94,18 @@ class Installer {
      */
     private static function create_capabilities() {
         $admin = get_role('administrator');
+        $shop_manager = get_role('shop_manager');
         
         if ($admin) {
             $admin->add_cap('manage_battle_ledger');
             $admin->add_cap('manage_tournaments');
             $admin->add_cap('view_tournament_reports');
+        }
+
+        if ($shop_manager) {
+            $shop_manager->add_cap('manage_battle_ledger');
+            $shop_manager->add_cap('manage_tournaments');
+            $shop_manager->add_cap('view_tournament_reports');
         }
     }
     
