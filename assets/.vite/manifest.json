@@ -1,0 +1,129 @@
+{
+  "_currency-WRx_HQhT.js": {
+    "file": "js/currency-WRx_HQhT.js",
+    "name": "currency"
+  },
+  "_key-CGfBtRTK.js": {
+    "file": "js/key-CGfBtRTK.js",
+    "name": "key",
+    "imports": [
+      "_currency-WRx_HQhT.js"
+    ]
+  },
+  "_lock-CedrAb2j.js": {
+    "file": "js/lock-CedrAb2j.js",
+    "name": "lock",
+    "imports": [
+      "_currency-WRx_HQhT.js"
+    ]
+  },
+  "_log-out-DdohVEg8.js": {
+    "file": "js/log-out-DdohVEg8.js",
+    "name": "log-out",
+    "imports": [
+      "_currency-WRx_HQhT.js"
+    ]
+  },
+  "_settings-Cuf0xrMt.js": {
+    "file": "js/settings-Cuf0xrMt.js",
+    "name": "settings",
+    "imports": [
+      "_currency-WRx_HQhT.js"
+    ]
+  },
+  "_trending-down-Dpl16pqJ.js": {
+    "file": "js/trending-down-Dpl16pqJ.js",
+    "name": "trending-down",
+    "imports": [
+      "_currency-WRx_HQhT.js"
+    ]
+  },
+  "_user-DNGJuD-p.js": {
+    "file": "js/user-DNGJuD-p.js",
+    "name": "user",
+    "imports": [
+      "_currency-WRx_HQhT.js"
+    ]
+  },
+  "_user-plus-BO9gbdxo.js": {
+    "file": "js/user-plus-BO9gbdxo.js",
+    "name": "user-plus",
+    "imports": [
+      "_currency-WRx_HQhT.js"
+    ]
+  },
+  "_users-DY6dNscm.js": {
+    "file": "js/users-DY6dNscm.js",
+    "name": "users",
+    "imports": [
+      "_currency-WRx_HQhT.js"
+    ]
+  },
+  "src/frontend-auth-login/frontend.tsx": {
+    "file": "js/frontend.js",
+    "name": "frontend",
+    "src": "src/frontend-auth-login/frontend.tsx",
+    "isEntry": true,
+    "imports": [
+      "_currency-WRx_HQhT.js",
+      "_user-DNGJuD-p.js",
+      "_lock-CedrAb2j.js",
+      "_settings-Cuf0xrMt.js",
+      "_log-out-DdohVEg8.js"
+    ],
+    "css": [
+      "css/frontend.css"
+    ]
+  },
+  "src/frontend-dashboard/frontend-dashboard.tsx": {
+    "file": "js/dashboard.js",
+    "name": "dashboard",
+    "src": "src/frontend-dashboard/frontend-dashboard.tsx",
+    "isEntry": true,
+    "imports": [
+      "_currency-WRx_HQhT.js",
+      "_users-DY6dNscm.js",
+      "_log-out-DdohVEg8.js",
+      "_user-DNGJuD-p.js",
+      "_trending-down-Dpl16pqJ.js",
+      "_key-CGfBtRTK.js",
+      "_lock-CedrAb2j.js"
+    ],
+    "css": [
+      "css/dashboard.css"
+    ]
+  },
+  "src/frontend-live-tournaments/frontend-live-tournaments.tsx": {
+    "file": "js/live-tournaments.js",
+    "name": "live-tournaments",
+    "src": "src/frontend-live-tournaments/frontend-live-tournaments.tsx",
+    "isEntry": true,
+    "imports": [
+      "_currency-WRx_HQhT.js",
+      "_users-DY6dNscm.js",
+      "_user-plus-BO9gbdxo.js",
+      "_lock-CedrAb2j.js",
+      "_key-CGfBtRTK.js"
+    ],
+    "css": [
+      "css/live-tournaments.css"
+    ]
+  },
+  "src/main.tsx": {
+    "file": "js/main.js",
+    "name": "main",
+    "src": "src/main.tsx",
+    "isEntry": true,
+    "imports": [
+      "_currency-WRx_HQhT.js",
+      "_users-DY6dNscm.js",
+      "_trending-down-Dpl16pqJ.js",
+      "_settings-Cuf0xrMt.js",
+      "_user-DNGJuD-p.js",
+      "_user-plus-BO9gbdxo.js"
+    ],
+    "css": [
+      "css/main.css"
+    ]
+  }
+}

@@ -23,6 +23,8 @@ Thumbs.db
 
 # Vite dev cache
 .vite/
+!assets/.vite/
+!assets/.vite/manifest.json
 
 # Diagnostic file (dev only)
 _diag.php
