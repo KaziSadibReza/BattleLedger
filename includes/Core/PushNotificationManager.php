@@ -23,27 +23,85 @@ class PushNotificationManager {
      * Returns ['public' => base64url, 'private' => base64url]
      */
     public static function get_vapid_keys(): array {
-        $public  = get_option(self::OPTION_PUBLIC);
-        $private = get_option(self::OPTION_PRIVATE);
+        $public  = get_option(self::OPTION_PUBLIC, '');
+        $private = get_option(self::OPTION_PRIVATE, '');
 
-        if ($public && $private) {
+        if (self::is_valid_vapid_key_pair($public, $private)) {
             return ['public' => $public, 'private' => $private];
         }
 
-        return self::generate_vapid_keys();
+        if (!empty($public) || !empty($private)) {
+            // Remove malformed values so we can re-attempt generation cleanly.
+            delete_option(self::OPTION_PUBLIC);
+            delete_option(self::OPTION_PRIVATE);
+        }
+
+        try {
+            return self::generate_vapid_keys();
+        } catch (\Throwable $e) {
+            self::log_error('VAPID key generation failed: ' . $e->getMessage());
+            return ['public' => '', 'private' => ''];
+        }
     }
 
     /**
      * Generate a new ECDSA P-256 key pair for VAPID, stored as base64url.
      */
     private static function generate_vapid_keys(): array {
+        if (!function_exists('openssl_pkey_new') || !defined('OPENSSL_KEYTYPE_EC')) {
+            throw new \RuntimeException('OpenSSL EC key generation is unavailable.');
+        }
+
         // Generate ephemeral EC key pair using OpenSSL
-        $key = openssl_pkey_new([
+        $args = [
             'curve_name'       => 'prime256v1',
             'private_key_type' => OPENSSL_KEYTYPE_EC,
-        ]);
+        ];
+
+        $key = openssl_pkey_new($args);
+        if (!$key) {
+            $candidate_paths = [];
+            $env_conf = getenv('OPENSSL_CONF');
+            if (is_string($env_conf) && $env_conf !== '') {
+                $candidate_paths[] = $env_conf;
+            }
+
+            if (defined('PHP_BINARY') && is_string(PHP_BINARY) && PHP_BINARY !== '') {
+                $php_bin_dir = dirname(PHP_BINARY);
+                $candidate_paths[] = $php_bin_dir . DIRECTORY_SEPARATOR . 'extras' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . 'openssl.cnf';
+                $candidate_paths[] = dirname($php_bin_dir) . DIRECTORY_SEPARATOR . 'extras' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . 'openssl.cnf';
+            }
+
+            foreach ($candidate_paths as $path) {
+                if (!is_string($path) || $path === '' || !file_exists($path)) {
+                    continue;
+                }
+
+                $key = openssl_pkey_new($args + ['config' => $path]);
+                if ($key) {
+                    break;
+                }
+            }
+        }
+
+        if (!$key) {
+            $openssl_errors = self::consume_openssl_errors();
+            throw new \RuntimeException('Unable to generate VAPID key pair. ' . $openssl_errors);
+        }
 
         $details = openssl_pkey_get_details($key);
+        if (!is_array($details)) {
+            $openssl_errors = self::consume_openssl_errors();
+            throw new \RuntimeException('OpenSSL did not return key details. ' . $openssl_errors);
+        }
+
+        if (
+            !isset($details['ec']) ||
+            !is_array($details['ec']) ||
+            !isset($details['ec']['x'], $details['ec']['y'], $details['ec']['d'])
+        ) {
+            throw new \RuntimeException('OpenSSL returned an unexpected EC key detail structure.');
+        }
 
         // The public key is the uncompressed point (65 bytes: 0x04 || x || y)
         $x = $details['ec']['x'];
@@ -56,6 +114,10 @@ class PushNotificationManager {
         $public_b64  = self::base64url_encode($public_raw);
         $private_b64 = self::base64url_encode($private_raw);
 
+        if (!self::is_valid_vapid_key_pair($public_b64, $private_b64)) {
+            throw new \RuntimeException('Generated VAPID key pair failed validation.');
+        }
+
         update_option(self::OPTION_PUBLIC, $public_b64, false);
         update_option(self::OPTION_PRIVATE, $private_b64, false);
 
@@ -67,7 +129,7 @@ class PushNotificationManager {
      */
     public static function get_public_key(): string {
         $keys = self::get_vapid_keys();
-        return $keys['public'];
+        return is_string($keys['public'] ?? null) ? $keys['public'] : '';
     }
 
     /* ──────────────────────────────────────────
@@ -82,30 +144,39 @@ class PushNotificationManager {
      * @param array $subscription ['endpoint' => string, 'keys' => ['p256dh' => string, 'auth' => string]]
      */
     public static function save_subscription(int $user_id, array $subscription): bool {
-        if (empty($subscription['endpoint']) || empty($subscription['keys']['p256dh']) || empty($subscription['keys']['auth'])) {
+        $normalized = self::normalize_subscription($subscription);
+        if ($normalized === null) {
             return false;
         }
 
         $subs = self::get_subscriptions($user_id);
+        $clean_subs = [];
+        $replaced = false;
 
-        // Avoid duplicates by endpoint
-        $endpoint = esc_url_raw($subscription['endpoint']);
         foreach ($subs as $existing) {
-            if (($existing['endpoint'] ?? '') === $endpoint) {
-                return true; // already stored
+            if (!is_array($existing)) {
+                continue;
             }
+
+            $existing_normalized = self::normalize_subscription($existing);
+            if ($existing_normalized === null) {
+                continue;
+            }
+
+            if (($existing_normalized['endpoint'] ?? '') === $normalized['endpoint']) {
+                $clean_subs[] = $normalized;
+                $replaced = true;
+                continue;
+            }
+
+            $clean_subs[] = $existing_normalized;
         }
 
-        $subs[] = [
-            'endpoint' => $endpoint,
-            'keys'     => [
-                'p256dh' => sanitize_text_field($subscription['keys']['p256dh']),
-                'auth'   => sanitize_text_field($subscription['keys']['auth']),
-            ],
-            'created'  => gmdate('Y-m-d H:i:s'),
-        ];
+        if (!$replaced) {
+            $clean_subs[] = $normalized;
+        }
 
-        update_user_meta($user_id, self::META_KEY, $subs);
+        update_user_meta($user_id, self::META_KEY, array_values($clean_subs));
         return true;
     }
 
@@ -144,6 +215,27 @@ class PushNotificationManager {
             return;
         }
 
+        $valid_subs = [];
+        foreach ($subs as $sub) {
+            if (!is_array($sub)) {
+                continue;
+            }
+
+            $normalized = self::normalize_subscription($sub);
+            if ($normalized !== null) {
+                $valid_subs[] = $normalized;
+            }
+        }
+
+        if (empty($valid_subs)) {
+            update_user_meta($user_id, self::META_KEY, []);
+            return;
+        }
+
+        if (count($valid_subs) !== count($subs)) {
+            update_user_meta($user_id, self::META_KEY, array_values($valid_subs));
+        }
+
         $payload = wp_json_encode([
             'title' => $title,
             'body'  => $body,
@@ -152,12 +244,26 @@ class PushNotificationManager {
             'data'  => $data,
         ]);
 
-        $keys = self::get_vapid_keys();
+        if (!is_string($payload) || $payload === '') {
+            return;
+        }
 
-        foreach ($subs as $sub) {
-            $result = self::send_push($sub, $payload, $keys);
-            // If subscription expired (410 Gone) or invalid (404), remove it
-            if ($result === 410 || $result === 404) {
+        $keys = self::get_vapid_keys();
+        if (!self::is_valid_vapid_key_pair($keys['public'] ?? '', $keys['private'] ?? '')) {
+            self::log_error('Push send aborted: VAPID keys unavailable or invalid.');
+            return;
+        }
+
+        foreach ($valid_subs as $sub) {
+            try {
+                $result = self::send_push($sub, $payload, $keys);
+            } catch (\Throwable $e) {
+                self::log_error('Push send failed for user ' . $user_id . ': ' . $e->getMessage());
+                continue;
+            }
+
+            // Remove expired/invalid subscriptions so future sends can recover.
+            if (in_array($result, [400, 401, 403, 404, 410], true)) {
                 self::remove_subscription($user_id, $sub['endpoint']);
             }
         }
@@ -269,12 +375,66 @@ class PushNotificationManager {
             return null;
         }
 
+        if (!function_exists('openssl_pkey_new') || !defined('OPENSSL_KEYTYPE_EC')) {
+            self::log_error('Payload encryption failed: OpenSSL EC key generation is unavailable.');
+            return null;
+        }
+
         // Generate ephemeral EC key pair
         $local_key = openssl_pkey_new([
             'curve_name'       => 'prime256v1',
             'private_key_type' => OPENSSL_KEYTYPE_EC,
         ]);
+
+        if (!$local_key) {
+            $candidate_paths = [];
+            $env_conf = getenv('OPENSSL_CONF');
+            if (is_string($env_conf) && $env_conf !== '') {
+                $candidate_paths[] = $env_conf;
+            }
+
+            if (defined('PHP_BINARY') && is_string(PHP_BINARY) && PHP_BINARY !== '') {
+                $php_bin_dir = dirname(PHP_BINARY);
+                $candidate_paths[] = $php_bin_dir . DIRECTORY_SEPARATOR . 'extras' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . 'openssl.cnf';
+                $candidate_paths[] = dirname($php_bin_dir) . DIRECTORY_SEPARATOR . 'extras' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . 'openssl.cnf';
+            }
+
+            foreach ($candidate_paths as $path) {
+                if (!is_string($path) || $path === '' || !file_exists($path)) {
+                    continue;
+                }
+
+                $local_key = openssl_pkey_new([
+                    'curve_name'       => 'prime256v1',
+                    'private_key_type' => OPENSSL_KEYTYPE_EC,
+                    'config'           => $path,
+                ]);
+
+                if ($local_key) {
+                    break;
+                }
+            }
+        }
+
+        if (!$local_key) {
+            self::log_error('Payload encryption failed: unable to generate ephemeral EC key pair. ' . self::consume_openssl_errors());
+            return null;
+        }
+
         $local_details = openssl_pkey_get_details($local_key);
+        if (!is_array($local_details)) {
+            self::log_error('Payload encryption failed: OpenSSL did not return EC key details. ' . self::consume_openssl_errors());
+            return null;
+        }
+
+        if (
+            !isset($local_details['ec']) ||
+            !is_array($local_details['ec']) ||
+            !isset($local_details['ec']['x'], $local_details['ec']['y'])
+        ) {
+            self::log_error('Payload encryption failed: invalid OpenSSL EC key details structure.');
+            return null;
+        }
 
         $local_x = str_pad($local_details['ec']['x'], 32, "\0", STR_PAD_LEFT);
         $local_y = str_pad($local_details['ec']['y'], 32, "\0", STR_PAD_LEFT);
@@ -463,6 +623,70 @@ class PushNotificationManager {
     }
 
     public static function base64url_decode(string $data): string {
-        return base64_decode(strtr($data, '-_', '+/'));
+        $decoded = base64_decode(strtr($data, '-_', '+/'), true);
+        return is_string($decoded) ? $decoded : '';
+    }
+
+    private static function is_valid_vapid_key_pair($public, $private): bool {
+        if (!is_string($public) || !is_string($private) || $public === '' || $private === '') {
+            return false;
+        }
+
+        $public_raw = self::base64url_decode($public);
+        $private_raw = self::base64url_decode($private);
+
+        return strlen($public_raw) === 65
+            && $public_raw[0] === "\x04"
+            && strlen($private_raw) === 32;
+    }
+
+    private static function consume_openssl_errors(): string {
+        if (!function_exists('openssl_error_string')) {
+            return '';
+        }
+
+        $errors = [];
+        while (($err = openssl_error_string()) !== false) {
+            $errors[] = $err;
+        }
+
+        return empty($errors) ? '' : implode(' | ', $errors);
+    }
+
+    private static function log_error(string $message): void {
+        if (function_exists('error_log')) {
+            error_log('[BattleLedger Push] ' . $message);
+        }
+    }
+
+    private static function normalize_subscription(array $subscription): ?array {
+        $endpoint = esc_url_raw((string) ($subscription['endpoint'] ?? ''));
+        $keys = $subscription['keys'] ?? [];
+        $p256dh = sanitize_text_field((string) ($keys['p256dh'] ?? ''));
+        $auth = sanitize_text_field((string) ($keys['auth'] ?? ''));
+
+        if ($endpoint === '' || $p256dh === '' || $auth === '') {
+            return null;
+        }
+
+        $p256dh_raw = self::base64url_decode($p256dh);
+        $auth_raw = self::base64url_decode($auth);
+
+        if (
+            strlen($p256dh_raw) !== 65 ||
+            $p256dh_raw[0] !== "\x04" ||
+            strlen($auth_raw) !== 16
+        ) {
+            return null;
+        }
+
+        return [
+            'endpoint' => $endpoint,
+            'keys'     => [
+                'p256dh' => $p256dh,
+                'auth'   => $auth,
+            ],
+            'created'  => gmdate('Y-m-d H:i:s'),
+        ];
     }
 }

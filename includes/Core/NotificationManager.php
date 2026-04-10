@@ -86,8 +86,16 @@ class NotificationManager {
         // If this is a user-targeted notification, also send a push
         $user_id = (int) ($extra['user_id'] ?? 0);
         if ($inserted && $user_id > 0) {
+            $icon_for_push = '';
+            if (isset($extra['icon']) && is_string($extra['icon'])) {
+                $raw_icon = trim($extra['icon']);
+                if ($raw_icon !== '' && (str_starts_with($raw_icon, '/') || preg_match('#^https?://#i', $raw_icon) === 1)) {
+                    $icon_for_push = $raw_icon;
+                }
+            }
+
             PushNotificationManager::send_to_user($user_id, $title, $message, [
-                'icon' => $extra['icon'] ?? '',
+                'icon' => $icon_for_push,
                 'url'  => $extra['link'] ?? '',
             ]);
         }
@@ -301,6 +309,25 @@ class NotificationManager {
         ]);
     }
 
+    /** Withdrawal cancelled/refunded — notify the user */
+    public static function withdrawal_cancelled_refunded(int $user_id, float $amount, string $currency = '', string $reason = ''): void {
+        if ($currency === '') $currency = \BattleLedger\Wallet\WalletManager::get_currency();
+        $msg = sprintf(
+            'Your withdrawal request for %s %s was cancelled. The amount remains available in your wallet.',
+            number_format($amount, 2),
+            $currency
+        );
+        if ($reason) {
+            $msg .= ' Note: ' . $reason;
+        }
+        self::create('alert', 'Withdrawal Cancelled', $msg, [
+            'user_id'  => $user_id,
+            'icon'     => 'alert',
+            'link'     => '/dashboard/wallet',
+            'metadata' => ['amount' => $amount, 'currency' => $currency],
+        ]);
+    }
+
     /** Payment pending (generic alert) */
     public static function payment_pending(int $count): void {
         self::create('alert', 'Payment Pending', sprintf(
@@ -347,6 +374,56 @@ class NotificationManager {
             'icon'     => 'success',
             'link'     => '/dashboard/wallet',
             'metadata' => ['amount' => $amount, 'currency' => $currency],
+        ]);
+    }
+
+    /** Notify user: deposit status updated (cancelled/failed/refunded) */
+    public static function user_deposit_status_update(int $user_id, float $amount, string $status, string $currency = ''): void {
+        if ($currency === '') {
+            $currency = \BattleLedger\Wallet\WalletManager::get_currency();
+        }
+
+        $status = sanitize_key($status);
+        $title = 'Deposit Status Updated';
+        $message = sprintf(
+            'Your deposit of %s %s has status: %s.',
+            number_format($amount, 2),
+            $currency,
+            ucfirst(str_replace('-', ' ', $status))
+        );
+
+        if ($status === 'cancelled') {
+            $title = 'Deposit Cancelled';
+            $message = sprintf(
+                'Your deposit of %s %s was cancelled. No money was added to your wallet.',
+                number_format($amount, 2),
+                $currency
+            );
+        } elseif ($status === 'failed') {
+            $title = 'Deposit Failed';
+            $message = sprintf(
+                'Your deposit of %s %s failed. No money was added to your wallet.',
+                number_format($amount, 2),
+                $currency
+            );
+        } elseif ($status === 'refunded') {
+            $title = 'Deposit Refunded';
+            $message = sprintf(
+                'Your deposit of %s %s was refunded. No additional money was added to your wallet.',
+                number_format($amount, 2),
+                $currency
+            );
+        }
+
+        self::create('alert', $title, $message, [
+            'user_id'  => $user_id,
+            'icon'     => 'alert',
+            'link'     => '/dashboard/wallet',
+            'metadata' => [
+                'amount' => $amount,
+                'currency' => $currency,
+                'status' => $status,
+            ],
         ]);
     }
 

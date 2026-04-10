@@ -209,17 +209,37 @@ class AuthController {
         $result = OTPManager::send_otp($email, $type);
         
         if (!$result['success']) {
-            return new \WP_REST_Response([
+            $status = 400;
+            if (!empty($result['error_code']) && in_array($result['error_code'], ['rate_limited', 'resend_cooldown'], true)) {
+                $status = 429;
+            }
+
+            $payload = [
                 'success' => false,
                 'message' => $result['error'],
-            ], 400);
+            ];
+
+            if (!empty($result['error_code'])) {
+                $payload['error_code'] = $result['error_code'];
+            }
+            if (isset($result['retry_after'])) {
+                $payload['retry_after'] = (int) $result['retry_after'];
+            }
+
+            return new \WP_REST_Response($payload, $status);
         }
         
-        return new \WP_REST_Response([
+        $payload = [
             'success' => true,
             'message' => $result['message'],
             'expires_in' => $result['expires_in'],
-        ], 200);
+        ];
+
+        if (isset($result['resend_cooldown'])) {
+            $payload['resend_cooldown'] = (int) $result['resend_cooldown'];
+        }
+
+        return new \WP_REST_Response($payload, 200);
     }
     
     /**

@@ -15,6 +15,7 @@ class Installer {
     public static function maybe_upgrade() {
         // Ensure required capabilities exist for all supported roles on every init.
         self::create_capabilities();
+        self::create_pages();
 
         $current = get_option('battle_ledger_db_version', '0');
         if (version_compare($current, self::DB_VERSION, '<')) {

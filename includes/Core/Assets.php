@@ -17,7 +17,13 @@ class Assets {
     
     private function __construct() {
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
-        add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);        add_filter('script_loader_tag', [$this, 'add_module_type_to_scripts'], 10, 2);
+        add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
+        add_action('wp_head', [$this, 'output_pwa_meta_tags'], 2);
+        add_action('wp_enqueue_scripts', [$this, 'strip_theme_assets_for_landing_shell'], 99999);
+        add_action('wp_print_styles', [$this, 'strip_theme_assets_for_landing_shell'], 1);
+        add_action('wp_print_scripts', [$this, 'strip_theme_assets_for_landing_shell'], 1);
+        add_action('template_redirect', [$this, 'serve_pwa_assets']);
+        add_filter('script_loader_tag', [$this, 'add_module_type_to_scripts'], 10, 2);
     }
     
     /**
@@ -29,6 +35,10 @@ class Assets {
             'battleledger-vite-client-frontend', 
             'battleledger-dashboard',
             'battleledger-vite-client-dashboard',
+            'battleledger-landing',
+            'battleledger-vite-client-landing',
+            'battleledger-landing-shell',
+            'battleledger-vite-client-landing-shell',
             'battleledger-live-tournaments',
             'battleledger-vite-client-live-tournaments',
             'battleledger-admin',
@@ -205,6 +215,44 @@ class Assets {
             
             wp_register_style('battleledger-dashboard', false);
 
+            // Register landing scripts for dev
+            wp_register_script(
+                'battleledger-landing',
+                $dev_server . '/src/frontend-landing/frontend-landing.tsx',
+                [],
+                null,
+                true
+            );
+
+            wp_register_script(
+                'battleledger-vite-client-landing',
+                $dev_server . '/@vite/client',
+                [],
+                null,
+                true
+            );
+
+            wp_register_style('battleledger-landing', false);
+
+            // Register landing-shell scripts for dev (header/footer only shell)
+            wp_register_script(
+                'battleledger-landing-shell',
+                $dev_server . '/src/frontend-landing-shell/frontend-landing-shell.tsx',
+                [],
+                null,
+                true
+            );
+
+            wp_register_script(
+                'battleledger-vite-client-landing-shell',
+                $dev_server . '/@vite/client',
+                [],
+                null,
+                true
+            );
+
+            wp_register_style('battleledger-landing-shell', false);
+
             // Register live-tournaments scripts for dev
             wp_register_script(
                 'battleledger-live-tournaments',
@@ -290,6 +338,64 @@ class Assets {
                 }
             }
 
+            // Register landing bundle
+            if (isset($manifest['src/frontend-landing/frontend-landing.tsx'])) {
+                $landing_entry = $manifest['src/frontend-landing/frontend-landing.tsx'];
+
+                if (isset($landing_entry['file'])) {
+                    wp_register_script(
+                        'battleledger-landing',
+                        BATTLE_LEDGER_ASSETS_URL . $landing_entry['file'],
+                        [],
+                        BATTLE_LEDGER_VERSION,
+                        true
+                    );
+                }
+
+                $landing_css_files = $this->collect_manifest_css_files(
+                    $manifest,
+                    'src/frontend-landing/frontend-landing.tsx'
+                );
+
+                foreach ($landing_css_files as $index => $css_file) {
+                    wp_register_style(
+                        'battleledger-landing' . ($index > 0 ? '-' . $index : ''),
+                        BATTLE_LEDGER_ASSETS_URL . $css_file,
+                        [],
+                        BATTLE_LEDGER_VERSION
+                    );
+                }
+            }
+
+            // Register landing-shell bundle
+            if (isset($manifest['src/frontend-landing-shell/frontend-landing-shell.tsx'])) {
+                $landing_shell_entry = $manifest['src/frontend-landing-shell/frontend-landing-shell.tsx'];
+
+                if (isset($landing_shell_entry['file'])) {
+                    wp_register_script(
+                        'battleledger-landing-shell',
+                        BATTLE_LEDGER_ASSETS_URL . $landing_shell_entry['file'],
+                        [],
+                        BATTLE_LEDGER_VERSION,
+                        true
+                    );
+                }
+
+                $landing_shell_css_files = $this->collect_manifest_css_files(
+                    $manifest,
+                    'src/frontend-landing-shell/frontend-landing-shell.tsx'
+                );
+
+                foreach ($landing_shell_css_files as $index => $css_file) {
+                    wp_register_style(
+                        'battleledger-landing-shell' . ($index > 0 ? '-' . $index : ''),
+                        BATTLE_LEDGER_ASSETS_URL . $css_file,
+                        [],
+                        BATTLE_LEDGER_VERSION
+                    );
+                }
+            }
+
             // Register live-tournaments bundle
             if (isset($manifest['src/frontend-live-tournaments/frontend-live-tournaments.tsx'])) {
                 $lt_entry = $manifest['src/frontend-live-tournaments/frontend-live-tournaments.tsx'];
@@ -316,6 +422,433 @@ class Assets {
                 }
             }
         }
+
+        // Ensure plugin shell assets are available in <head> for BattleLedger pages.
+        // Shortcode execution can happen after wp_head, which is too late for styles.
+        $this->enqueue_plugin_shell_assets_if_needed();
+    }
+
+    /**
+     * Enqueue all registered style handles for a base prefix.
+     * Example: battleledger-landing, battleledger-landing-1, battleledger-landing-2...
+     */
+    private function enqueue_style_group(string $base_handle): void {
+        if (wp_style_is($base_handle, 'registered')) {
+            wp_enqueue_style($base_handle);
+        }
+
+        for ($index = 1; $index <= 20; $index++) {
+            $handle = $base_handle . '-' . $index;
+            if (!wp_style_is($handle, 'registered')) {
+                break;
+            }
+
+            wp_enqueue_style($handle);
+        }
+    }
+
+    /**
+     * Enqueue landing/shell assets early when plugin-only shell is active.
+     */
+    private function enqueue_plugin_shell_assets_if_needed(): void {
+        if (!is_singular('page') || !PageInstaller::is_landing_plugin_shell_enabled()) {
+            return;
+        }
+
+        $page_id = (int) get_queried_object_id();
+        if ($page_id <= 0 || !PageInstaller::is_battleledger_page($page_id)) {
+            return;
+        }
+
+        if (PageInstaller::is_landing_page($page_id)) {
+            if (wp_script_is('battleledger-vite-client-landing', 'registered')) {
+                wp_enqueue_script('battleledger-vite-client-landing');
+            }
+
+            if (wp_script_is('battleledger-landing', 'registered')) {
+                wp_enqueue_script('battleledger-landing');
+            }
+
+            $this->enqueue_style_group('battleledger-landing');
+        }
+
+        if ($page_id === PageInstaller::get_page_id('login')) {
+            if (wp_script_is('battleledger-vite-client-frontend', 'registered')) {
+                wp_enqueue_script('battleledger-vite-client-frontend');
+            }
+
+            if (wp_script_is('battleledger-frontend', 'registered')) {
+                wp_enqueue_script('battleledger-frontend');
+            }
+
+            $this->enqueue_style_group('battleledger-frontend');
+        }
+
+        if ($page_id === PageInstaller::get_page_id('dashboard')) {
+            if (wp_script_is('battleledger-vite-client-dashboard', 'registered')) {
+                wp_enqueue_script('battleledger-vite-client-dashboard');
+            }
+
+            if (wp_script_is('battleledger-dashboard', 'registered')) {
+                wp_enqueue_script('battleledger-dashboard');
+            }
+
+            $this->enqueue_style_group('battleledger-dashboard');
+        }
+
+        if (wp_script_is('battleledger-vite-client-landing-shell', 'registered')) {
+            wp_enqueue_script('battleledger-vite-client-landing-shell');
+        }
+
+        if (wp_script_is('battleledger-landing-shell', 'registered')) {
+            wp_enqueue_script('battleledger-landing-shell');
+
+            $runtime_props = $this->get_landing_runtime_props($page_id);
+            wp_add_inline_script(
+                'battleledger-landing-shell',
+                'window.battleLedgerLandingProps = ' . wp_json_encode($runtime_props) . ';',
+                'before'
+            );
+        }
+
+        $this->enqueue_style_group('battleledger-landing-shell');
+    }
+
+    /**
+     * Build runtime landing props used by header/footer shell rendering.
+     */
+    private function get_landing_runtime_props(int $page_id): array {
+        $login_url = PageInstaller::get_page_url('login');
+        if (!$login_url) {
+            $login_url = wp_login_url(get_permalink($page_id) ?: home_url('/'));
+        }
+
+        $dashboard_url = PageInstaller::get_page_url('dashboard');
+        if (!$dashboard_url) {
+            $dashboard_url = home_url('/');
+        }
+
+        $page_type = 'shell';
+        if ($page_id === PageInstaller::get_page_id('login')) {
+            $page_type = 'login';
+        } elseif ($page_id === PageInstaller::get_page_id('dashboard')) {
+            $page_type = 'dashboard';
+        } elseif ($page_id === PageInstaller::get_page_id('landing')) {
+            $page_type = 'landing';
+        }
+
+        return [
+            'apiUrl' => esc_url_raw(rest_url()),
+            'nonce' => wp_create_nonce('wp_rest'),
+            'pluginUrl' => BATTLE_LEDGER_PLUGIN_URL,
+            'homeUrl' => home_url('/'),
+            'landingUrl' => PageInstaller::get_page_url('landing'),
+            'isLoggedIn' => is_user_logged_in(),
+            'loginUrl' => $login_url,
+            'dashboardUrl' => $dashboard_url,
+            'authButtonHtml' => do_shortcode('[battleledger_auth popup="true" button_text="Login"]'),
+            'pageType' => $page_type,
+        ];
+    }
+
+    /**
+     * Output PWA manifest/meta tags for BattleLedger frontend pages.
+     */
+    public function output_pwa_meta_tags(): void {
+        if (is_admin() || !is_singular('page')) {
+            return;
+        }
+
+        $page_id = (int) get_queried_object_id();
+        if ($page_id <= 0 || !PageInstaller::is_battleledger_page($page_id)) {
+            return;
+        }
+
+        $manifest_args = [
+            'battleledger_pwa_manifest' => '1',
+        ];
+
+        $site_icon_id = (int) get_option('site_icon');
+        if ($site_icon_id > 0) {
+            // Change the manifest URL when the selected Site Icon changes.
+            $manifest_args['icon'] = (string) $site_icon_id;
+        }
+
+        $manifest_url = add_query_arg($manifest_args, home_url('/'));
+
+        echo '<link rel="manifest" href="' . esc_url($manifest_url) . '" />' . "\n";
+        echo '<meta name="theme-color" content="#0b1220" />' . "\n";
+        echo '<meta name="apple-mobile-web-app-capable" content="yes" />' . "\n";
+        echo '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />' . "\n";
+
+        $apple_icon = get_site_icon_url(180);
+        if ($apple_icon) {
+            echo '<link rel="apple-touch-icon" href="' . esc_url($apple_icon) . '" />' . "\n";
+        }
+    }
+
+    /**
+     * Serve dynamic PWA assets from same-origin root URLs.
+     */
+    public function serve_pwa_assets(): void {
+        if (is_admin()) {
+            return;
+        }
+
+        if (isset($_GET['battleledger_pwa_manifest'])) {
+            nocache_headers();
+            header('Content-Type: application/manifest+json; charset=utf-8');
+            echo wp_json_encode($this->get_pwa_manifest_payload(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        if (isset($_GET['battleledger_pwa_sw'])) {
+            nocache_headers();
+            header('Content-Type: application/javascript; charset=utf-8');
+
+            $home_url = home_url('/');
+
+            echo "const CACHE_NAME = 'battleledger-pwa-v2';\n";
+            echo "const OFFLINE_FALLBACK = '" . esc_js($home_url) . "';\n";
+            echo "self.addEventListener('install', (event) => {\n";
+            echo "  event.waitUntil((async () => {\n";
+            echo "    self.skipWaiting();\n";
+            echo "    const cache = await caches.open(CACHE_NAME);\n";
+            echo "    await cache.add(OFFLINE_FALLBACK).catch(() => null);\n";
+            echo "  })());\n";
+            echo "});\n";
+            echo "self.addEventListener('activate', (event) => {\n";
+            echo "  event.waitUntil((async () => {\n";
+            echo "    await self.clients.claim();\n";
+            echo "    const keys = await caches.keys();\n";
+            echo "    await Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));\n";
+            echo "  })());\n";
+            echo "});\n";
+            echo "self.addEventListener('fetch', (event) => {\n";
+            echo "  if (event.request.method !== 'GET') return;\n";
+            echo "  const requestUrl = new URL(event.request.url);\n";
+            echo "  if (requestUrl.origin !== self.location.origin) return;\n";
+            echo "  if (requestUrl.searchParams.has('battleledger_pwa_manifest') || requestUrl.searchParams.has('battleledger_pwa_sw')) return;\n";
+            echo "  if (requestUrl.pathname.includes('/wp-json/') || requestUrl.pathname.includes('admin-ajax.php')) return;\n";
+            echo "  if (event.request.mode === 'navigate') {\n";
+            echo "    event.respondWith(fetch(event.request).catch(async () => (await caches.match(OFFLINE_FALLBACK)) || Response.error()));\n";
+            echo "    return;\n";
+            echo "  }\n";
+            echo "  event.respondWith((async () => {\n";
+            echo "    const cached = await caches.match(event.request);\n";
+            echo "    if (cached) return cached;\n";
+            echo "    const response = await fetch(event.request);\n";
+            echo "    if (response && response.status === 200 && response.type === 'basic') {\n";
+            echo "      const cache = await caches.open(CACHE_NAME);\n";
+            echo "      cache.put(event.request, response.clone()).catch(() => null);\n";
+            echo "    }\n";
+            echo "    return response;\n";
+            echo "  })());\n";
+            echo "});\n";
+
+            exit;
+        }
+    }
+
+    /**
+     * Build manifest payload for install prompt support.
+     */
+    private function get_pwa_manifest_payload(): array {
+        $landing_url = PageInstaller::get_page_url('landing') ?: home_url('/');
+        $icons = [];
+
+        $icon_192 = get_site_icon_url(192);
+        $icon_512 = get_site_icon_url(512);
+
+        if ($icon_192) {
+            $icons[] = [
+                'src' => esc_url_raw($icon_192),
+                'sizes' => '192x192',
+                'type' => 'image/png',
+                'purpose' => 'any maskable',
+            ];
+        }
+
+        if ($icon_512) {
+            $icons[] = [
+                'src' => esc_url_raw($icon_512),
+                'sizes' => '512x512',
+                'type' => 'image/png',
+                'purpose' => 'any maskable',
+            ];
+        }
+
+        if (empty($icons)) {
+            $fallback_icon = BATTLE_LEDGER_PLUGIN_URL . 'assets/assets/esport-hero.png';
+            $icons[] = [
+                'src' => esc_url_raw($fallback_icon),
+                'sizes' => 'any',
+                'type' => 'image/png',
+                'purpose' => 'any',
+            ];
+        }
+
+        return [
+            'id' => trailingslashit($landing_url),
+            'name' => 'BattleLedger',
+            'short_name' => 'BattleLedger',
+            'description' => 'Compete in tournaments and win real prizes.',
+            'start_url' => add_query_arg('source', 'pwa', $landing_url),
+            'scope' => home_url('/'),
+            'display' => 'standalone',
+            'orientation' => 'portrait',
+            'background_color' => '#0b1220',
+            'theme_color' => '#0b1220',
+            'icons' => $icons,
+        ];
+    }
+
+    /**
+     * Remove theme CSS/JS when plugin-only landing shell is active.
+     */
+    public function strip_theme_assets_for_landing_shell(): void {
+        if (!$this->should_strip_theme_assets_for_landing_shell()) {
+            return;
+        }
+
+        $this->dequeue_theme_styles();
+        $this->dequeue_theme_scripts();
+    }
+
+    /**
+     * Whether current request is using plugin-only landing shell.
+     */
+    private function should_strip_theme_assets_for_landing_shell(): bool {
+        if (is_admin() || !is_singular('page')) {
+            return false;
+        }
+
+        $page_id = (int) get_queried_object_id();
+        if ($page_id <= 0) {
+            return false;
+        }
+
+        return PageInstaller::is_landing_plugin_shell_enabled() && PageInstaller::is_battleledger_page($page_id);
+    }
+
+    /**
+     * Check if an asset src belongs to the active theme (parent or child).
+     */
+    private function is_theme_asset_src(string $src): bool {
+        $src = trim($src);
+        if ($src === '') {
+            return false;
+        }
+
+        if (str_starts_with($src, '//')) {
+            $src = (is_ssl() ? 'https:' : 'http:') . $src;
+        }
+
+        if (str_starts_with($src, '/')) {
+            $src = home_url($src);
+        }
+
+        $template_uri = untrailingslashit(get_template_directory_uri());
+        $stylesheet_uri = untrailingslashit(get_stylesheet_directory_uri());
+
+        return str_contains($src, '/wp-content/themes/')
+            || str_starts_with($src, $template_uri)
+            || str_starts_with($src, $stylesheet_uri);
+    }
+
+    /**
+     * Dequeue theme-owned styles on landing shell pages.
+     */
+    private function dequeue_theme_styles(): void {
+        global $wp_styles;
+
+        if (!($wp_styles instanceof \WP_Styles)) {
+            return;
+        }
+
+        foreach ((array) $wp_styles->queue as $handle) {
+            if (str_starts_with($handle, 'battleledger-')) {
+                continue;
+            }
+
+            $registered = $wp_styles->registered[$handle] ?? null;
+            $src = ($registered && isset($registered->src)) ? (string) $registered->src : '';
+
+            if ($this->is_theme_asset_src($src)) {
+                wp_dequeue_style($handle);
+            }
+        }
+
+        // Common theme/global style handles that may not expose a theme src directly.
+        wp_dequeue_style('global-styles');
+        wp_dequeue_style('classic-theme-styles');
+        wp_dequeue_style('wp-block-library-theme');
+    }
+
+    /**
+     * Dequeue theme-owned scripts on landing shell pages.
+     */
+    private function dequeue_theme_scripts(): void {
+        global $wp_scripts;
+
+        if (!($wp_scripts instanceof \WP_Scripts)) {
+            return;
+        }
+
+        foreach ((array) $wp_scripts->queue as $handle) {
+            if (str_starts_with($handle, 'battleledger-')) {
+                continue;
+            }
+
+            $registered = $wp_scripts->registered[$handle] ?? null;
+            $src = ($registered && isset($registered->src)) ? (string) $registered->src : '';
+
+            if ($this->is_theme_asset_src($src)) {
+                wp_dequeue_script($handle);
+            }
+        }
+    }
+
+    /**
+     * Collect all CSS files for a Vite manifest entry, including imported chunks.
+     */
+    private function collect_manifest_css_files(array $manifest, string $entry_key): array {
+        $css_files = [];
+        $visited = [];
+
+        $walk = function (string $key) use (&$walk, $manifest, &$css_files, &$visited): void {
+            if (isset($visited[$key])) {
+                return;
+            }
+
+            $visited[$key] = true;
+
+            if (!isset($manifest[$key]) || !is_array($manifest[$key])) {
+                return;
+            }
+
+            $entry = $manifest[$key];
+
+            if (!empty($entry['css']) && is_array($entry['css'])) {
+                foreach ($entry['css'] as $css_file) {
+                    if (is_string($css_file) && $css_file !== '') {
+                        $css_files[] = $css_file;
+                    }
+                }
+            }
+
+            if (!empty($entry['imports']) && is_array($entry['imports'])) {
+                foreach ($entry['imports'] as $import_key) {
+                    if (is_string($import_key) && $import_key !== '') {
+                        $walk($import_key);
+                    }
+                }
+            }
+        };
+
+        $walk($entry_key);
+
+        return array_values(array_unique($css_files));
     }
     
     /**

@@ -105,6 +105,94 @@ class WalletPaymentController {
     private static function clean_price($amount): string {
         return html_entity_decode(strip_tags(wc_price($amount)), ENT_QUOTES, 'UTF-8');
     }
+
+    /**
+     * Convert WooCommerce status slug into a readable label.
+     */
+    private static function format_order_status_label(string $status): string {
+        $labels = [
+            'pending' => 'Pending payment',
+            'on-hold' => 'On hold',
+            'processing' => 'Processing',
+            'completed' => 'Completed',
+            'failed' => 'Failed',
+            'cancelled' => 'Cancelled',
+            'refunded' => 'Refunded',
+        ];
+
+        if (isset($labels[$status])) {
+            return $labels[$status];
+        }
+
+        return ucwords(str_replace(['-', '_'], ' ', $status));
+    }
+
+    /**
+     * Build a user-facing status message for wallet deposit orders.
+     */
+    private static function get_deposit_status_message(string $status, int $order_id, string $gateway_title, string $amount_display): string {
+        switch ($status) {
+            case 'completed':
+                return sprintf(
+                    __('Order #%d completed via %s. %s has been credited to your wallet.', 'battle-ledger'),
+                    $order_id,
+                    $gateway_title,
+                    $amount_display
+                );
+
+            case 'processing':
+                return sprintf(
+                    __('Order #%d is processing via %s. Your wallet will be credited with %s once it is marked completed.', 'battle-ledger'),
+                    $order_id,
+                    $gateway_title,
+                    $amount_display
+                );
+
+            case 'on-hold':
+                return sprintf(
+                    __('Order #%d is on hold via %s. Your wallet will be credited with %s after payment confirmation.', 'battle-ledger'),
+                    $order_id,
+                    $gateway_title,
+                    $amount_display
+                );
+
+            case 'pending':
+                return sprintf(
+                    __('Order #%d is pending payment via %s. Your wallet will be credited with %s once payment is completed.', 'battle-ledger'),
+                    $order_id,
+                    $gateway_title,
+                    $amount_display
+                );
+
+            case 'failed':
+                return sprintf(
+                    __('Order #%d failed via %s. No money was added to your wallet.', 'battle-ledger'),
+                    $order_id,
+                    $gateway_title
+                );
+
+            case 'cancelled':
+                return sprintf(
+                    __('Order #%d was cancelled via %s. No money was added to your wallet.', 'battle-ledger'),
+                    $order_id,
+                    $gateway_title
+                );
+
+            case 'refunded':
+                return sprintf(
+                    __('Order #%d was refunded via %s. No additional money was added to your wallet.', 'battle-ledger'),
+                    $order_id,
+                    $gateway_title
+                );
+
+            default:
+                return sprintf(
+                    __('Order #%d status: %s. Wallet credit is only applied when status becomes Completed.', 'battle-ledger'),
+                    $order_id,
+                    self::format_order_status_label($status)
+                );
+        }
+    }
     
     /**
      * Ensure WooCommerce session and cart are available in REST context.
@@ -283,6 +371,7 @@ class WalletPaymentController {
                 // COD/BACS set status to 'processing' — admin must mark 'completed' to release funds
                 $paid_statuses = ['completed'];
                 $pending_statuses = ['on-hold', 'pending', 'processing'];
+                $terminal_statuses = ['failed', 'cancelled', 'refunded'];
                 
                 if (in_array($order_status, $paid_statuses, true)) {
                     // Payment confirmed — credit wallet directly (don't rely on hooks)
@@ -324,6 +413,19 @@ class WalletPaymentController {
                             wc_price($amount),
                             $credit_result['transaction_id']
                         ));
+
+                        // Notify admin feed + user feed (also triggers push for the user feed)
+                        $dep_user = get_userdata($user_id);
+                        \BattleLedger\Core\NotificationManager::wallet_deposit(
+                            $dep_user ? $dep_user->display_name : 'User #' . $user_id,
+                            $amount,
+                            WalletManager::get_currency()
+                        );
+                        \BattleLedger\Core\NotificationManager::user_deposit_confirmed(
+                            $user_id,
+                            $amount,
+                            WalletManager::get_currency()
+                        );
                         
                         $new_balance = $credit_result['new_balance'];
                     } else {
@@ -354,44 +456,59 @@ class WalletPaymentController {
                         sprintf(__('Pending deposit via %s (Order #%d)', 'battle-ledger'), $gateway->get_title(), $order_id),
                         $order_id
                     );
+                    WalletManager::set_pending_deposit_status(
+                        $order_id,
+                        $order_status,
+                        sprintf(
+                            __('Deposit via %s (Order #%d) - %s', 'battle-ledger'),
+                            $gateway->get_title(),
+                            $order_id,
+                            self::format_order_status_label($order_status)
+                        )
+                    );
                     
                     $clean_amount = self::clean_price($amount);
                     
-                    $pending_messages = [
-                        'processing' => sprintf(
-                            __('Order #%d received via %s! Your wallet will be credited with %s once the order is marked as completed.', 'battle-ledger'),
-                            $order_id,
-                            $gateway->get_title(),
-                            $clean_amount
-                        ),
-                        'on-hold' => sprintf(
-                            __('Order #%d created via %s. Your wallet will be credited with %s once payment is confirmed.', 'battle-ledger'),
-                            $order_id,
-                            $gateway->get_title(),
-                            $clean_amount
-                        ),
-                        'pending' => sprintf(
-                            __('Order #%d created via %s. Awaiting payment of %s. Your wallet will be credited after payment.', 'battle-ledger'),
-                            $order_id,
-                            $gateway->get_title(),
-                            $clean_amount
-                        ),
-                    ];
-                    
                     return new WP_REST_Response([
                         'success' => true,
-                        'message' => $pending_messages[$order_status] ?? sprintf(
-                            __('Order #%d created with status: %s. Wallet will be updated once payment completes.', 'battle-ledger'),
-                            $order_id,
-                            ucfirst($order_status)
-                        ),
+                        'message' => self::get_deposit_status_message($order_status, $order_id, $gateway->get_title(), $clean_amount),
                         'order_id' => $order_id,
                         'order_status' => $order_status,
+                        'status_label' => self::format_order_status_label($order_status),
                         'new_balance' => $new_balance,
                         'wallet_credited' => false,
                         'requires_redirect' => false,
                     ], 200);
                     
+                } elseif (in_array($order_status, $terminal_statuses, true)) {
+                    // Terminal non-success status — preserve the pending record with final status
+                    $description = sprintf(
+                        __('Deposit via %s (Order #%d) - %s', 'battle-ledger'),
+                        $gateway->get_title(),
+                        $order_id,
+                        self::format_order_status_label($order_status)
+                    );
+
+                    $updated = WalletManager::set_pending_deposit_status($order_id, $order_status, $description);
+                    if (!$updated) {
+                        WalletManager::record_pending_deposit($user_id, $amount, $description, $order_id);
+                        WalletManager::set_pending_deposit_status($order_id, $order_status, $description);
+                    }
+
+                    return new WP_REST_Response([
+                        'success' => false,
+                        'message' => self::get_deposit_status_message(
+                            $order_status,
+                            $order_id,
+                            $gateway->get_title(),
+                            self::clean_price($amount)
+                        ),
+                        'order_id' => $order_id,
+                        'order_status' => $order_status,
+                        'status_label' => self::format_order_status_label($order_status),
+                        'requires_redirect' => false,
+                    ], 400);
+
                 } else {
                     // Unexpected status (failed, cancelled, etc.)
                     return new WP_REST_Response([
@@ -466,14 +583,61 @@ class WalletPaymentController {
         $status = $order->get_status();
         $is_paid = $status === 'completed';
         $is_pending = in_array($status, ['pending', 'on-hold', 'processing'], true);
+        $is_terminal = in_array($status, ['failed', 'cancelled', 'refunded'], true);
+
+        $amount = floatval($order->get_meta('_wallet_amount'));
+        if ($amount <= 0) {
+            $amount = floatval($order->get_total());
+        }
+
+        $gateway_title = $order->get_payment_method_title() ?: __('payment gateway', 'battle-ledger');
+        $status_message = self::get_deposit_status_message($status, $order_id, $gateway_title, self::clean_price($amount));
+
+        if ($is_pending) {
+            WalletManager::record_pending_deposit(
+                $user_id,
+                $amount,
+                sprintf(__('Pending deposit via %s (Order #%d)', 'battle-ledger'), $gateway_title, $order_id),
+                $order_id
+            );
+            WalletManager::set_pending_deposit_status(
+                $order_id,
+                $status,
+                sprintf(
+                    __('Deposit via %s (Order #%d) - %s', 'battle-ledger'),
+                    $gateway_title,
+                    $order_id,
+                    self::format_order_status_label($status)
+                )
+            );
+        }
+
+        if ($is_terminal) {
+            $description = sprintf(
+                __('Deposit via %s (Order #%d) - %s', 'battle-ledger'),
+                $gateway_title,
+                $order_id,
+                self::format_order_status_label($status)
+            );
+
+            $updated = WalletManager::set_pending_deposit_status($order_id, $status, $description);
+            if (!$updated) {
+                WalletManager::record_pending_deposit($user_id, $amount, $description, $order_id);
+                WalletManager::set_pending_deposit_status($order_id, $status, $description);
+            }
+        }
+
         $new_balance = WalletManager::get_balance($user_id);
         
         return new WP_REST_Response([
             'success' => true,
             'order_id' => $order_id,
             'status' => $status,
+            'status_label' => self::format_order_status_label($status),
+            'message' => $status_message,
             'is_paid' => $is_paid,
             'is_pending' => $is_pending,
+            'is_terminal' => $is_terminal,
             'new_balance' => $new_balance,
         ], 200);
     }

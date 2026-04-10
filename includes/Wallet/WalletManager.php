@@ -325,6 +325,12 @@ class WalletManager {
         }
         
         // Record with amount = expected amount but balance_after stays the same (no balance change)
+        $metadata = [
+            'status' => 'pending',
+            'order_id' => (int) $order_id,
+            'updated_at' => current_time('mysql'),
+        ];
+
         $wpdb->insert(
             $table,
             [
@@ -336,6 +342,7 @@ class WalletManager {
                 'description' => $description,
                 'reference_type' => 'order',
                 'reference_id' => $order_id,
+                'metadata' => wp_json_encode($metadata),
                 'created_by' => get_current_user_id(),
                 'created_at' => current_time('mysql'),
             ]
@@ -359,6 +366,61 @@ class WalletManager {
             'reference_id' => $order_id,
             'type' => self::TYPE_DEPOSIT_PENDING,
         ]);
+    }
+
+    /**
+     * Update pending deposit status for an order without changing wallet balance.
+     * Keeps a status trail visible to the user (pending/processing/cancelled/failed/refunded).
+     *
+     * @param int $order_id
+     * @param string $status
+     * @param string $description
+     * @return bool
+     */
+    public static function set_pending_deposit_status($order_id, string $status, string $description = ''): bool {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'bl_wallet_transactions';
+
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, metadata FROM $table WHERE reference_type = 'order' AND reference_id = %d AND type = %s ORDER BY id DESC LIMIT 1",
+            $order_id,
+            self::TYPE_DEPOSIT_PENDING
+        ));
+
+        if (!$existing) {
+            return false;
+        }
+
+        $metadata = [];
+        if (!empty($existing->metadata)) {
+            $decoded = json_decode((string) $existing->metadata, true);
+            if (is_array($decoded)) {
+                $metadata = $decoded;
+            }
+        }
+
+        $metadata['status'] = sanitize_key($status);
+        $metadata['order_id'] = (int) $order_id;
+        $metadata['updated_at'] = current_time('mysql');
+
+        $update_data = [
+            'metadata' => wp_json_encode($metadata),
+        ];
+
+        if ($description !== '') {
+            $update_data['description'] = $description;
+        }
+
+        $updated = $wpdb->update(
+            $table,
+            $update_data,
+            ['id' => (int) $existing->id],
+            null,
+            ['%d']
+        );
+
+        return $updated !== false;
     }
     
     /**
@@ -568,6 +630,7 @@ class WalletManager {
         global $wpdb;
         $wallets_table = $wpdb->prefix . 'bl_wallets';
         $transactions_table = $wpdb->prefix . 'bl_wallet_transactions';
+        $withdrawal_requests_table = $wpdb->prefix . 'bl_withdrawal_requests';
         
         $total_balance = $wpdb->get_var("SELECT SUM(balance) FROM $wallets_table WHERE status = 'active'");
         $total_wallets = $wpdb->get_var("SELECT COUNT(*) FROM $wallets_table");
@@ -587,6 +650,19 @@ class WalletManager {
             "SELECT COALESCE(ABS(SUM(amount)), 0) FROM $transactions_table WHERE DATE(created_at) = %s AND amount < 0",
             current_time('Y-m-d')
         ));
+
+        $pending_withdrawals_count = 0;
+        $pending_withdrawals_amount = 0.0;
+
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $withdrawal_requests_table)) === $withdrawal_requests_table) {
+            $pending_withdrawals_count = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM $withdrawal_requests_table WHERE status = 'pending'"
+            );
+
+            $pending_withdrawals_amount = floatval($wpdb->get_var(
+                "SELECT COALESCE(SUM(amount), 0) FROM $withdrawal_requests_table WHERE status = 'pending'"
+            ));
+        }
         
         return [
             'total_balance' => floatval($total_balance),
@@ -595,6 +671,8 @@ class WalletManager {
             'today_transactions' => (int) $today_transactions,
             'today_credits' => floatval($today_credits),
             'today_debits' => floatval($today_debits),
+            'pending_withdrawals_count' => $pending_withdrawals_count,
+            'pending_withdrawals_amount' => $pending_withdrawals_amount,
             'currency' => self::get_currency(),
         ];
     }

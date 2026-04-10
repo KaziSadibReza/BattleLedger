@@ -23,6 +23,7 @@ class Shortcodes {
      * Register shortcodes
      */
     public function register_shortcodes() {
+        add_shortcode('battleledger_landing', [$this, 'landing_page']);
         add_shortcode('battle_ledger_tournaments', [$this, 'tournaments_list']);
         add_shortcode('battle_ledger_tournament', [$this, 'single_tournament']);
         add_shortcode('battle_ledger_leaderboard', [$this, 'leaderboard']);
@@ -83,6 +84,72 @@ class Shortcodes {
         ob_start();
         include BATTLE_LEDGER_PLUGIN_DIR . 'templates/user-dashboard.php';
         return ob_get_clean();
+    }
+
+    /**
+     * Landing page shortcode (React SPA)
+     * Usage: [battleledger_landing]
+     */
+    public function landing_page($atts) {
+        $is_dev = wp_script_is('battleledger-vite-client-landing', 'registered');
+        if ($is_dev) {
+            wp_enqueue_script('battleledger-vite-client-landing');
+        }
+
+        wp_enqueue_script('battleledger-landing');
+        if (wp_style_is('battleledger-landing', 'registered')) {
+            wp_enqueue_style('battleledger-landing');
+        }
+
+        for ($index = 1; $index <= 20; $index++) {
+            $handle = 'battleledger-landing-' . $index;
+            if (!wp_style_is($handle, 'registered')) {
+                break;
+            }
+            wp_enqueue_style($handle);
+        }
+
+        $login_url = \BattleLedger\Core\PageInstaller::get_page_url('login');
+        if (!$login_url) {
+            $login_url = wp_login_url(get_permalink() ?: home_url('/'));
+        }
+
+        $dashboard_url = \BattleLedger\Core\PageInstaller::get_page_url('dashboard');
+        if (!$dashboard_url) {
+            $dashboard_url = home_url('/');
+        }
+
+        $auth_button_html = do_shortcode('[battleledger_auth popup="true" button_text="Login"]');
+        $live_tournaments_html = do_shortcode('[battleledger_live_tournaments]');
+        $live_tournaments_html_b64 = base64_encode($live_tournaments_html);
+
+        $props = [
+            'apiUrl' => esc_url_raw(rest_url()),
+            'nonce' => wp_create_nonce('wp_rest'),
+            'pluginUrl' => BATTLE_LEDGER_PLUGIN_URL,
+            'homeUrl' => home_url('/'),
+            'landingUrl' => \BattleLedger\Core\PageInstaller::get_page_url('landing'),
+            'isLoggedIn' => is_user_logged_in(),
+            'loginUrl' => $login_url,
+            'dashboardUrl' => $dashboard_url,
+            'liveTournamentsHtmlB64' => $live_tournaments_html_b64,
+            'pageType' => 'landing',
+        ];
+
+        // Also expose auth HTML via runtime props for direct landing initialization.
+        wp_add_inline_script(
+            'battleledger-landing',
+            'window.battleLedgerLandingProps = Object.assign({}, window.battleLedgerLandingProps || {}, ' . wp_json_encode([
+                'authButtonHtml' => $auth_button_html,
+                'liveTournamentsHtml' => $live_tournaments_html,
+            ]) . ');',
+            'before'
+        );
+
+        return sprintf(
+            '<div class="battleledger-landing-container" data-props="%s"></div>',
+            esc_attr(wp_json_encode($props))
+        );
     }
 
     /**

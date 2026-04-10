@@ -8,6 +8,8 @@
 
 namespace BattleLedger\Auth;
 
+use BattleLedger\Api\SettingsController;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -26,6 +28,7 @@ class OTPManager {
      */
     public static function send_otp(string $email, string $type = self::EMAIL_VERIFICATION): array {
         $email = Security::sanitize_email($email);
+        $resend_cooldown = max(10, (int) apply_filters('battleledger_otp_resend_cooldown', 60));
         
         if (!Security::validate_email($email)) {
             return [
@@ -37,11 +40,14 @@ class OTPManager {
         // Check rate limit
         $rate_check = Security::check_rate_limit($email, 'otp_send');
         if (!$rate_check['allowed']) {
+            $retry_after = max(1, (int) $rate_check['reset_time']);
             return [
                 'success' => false,
+                'error_code' => 'rate_limited',
+                'retry_after' => $retry_after,
                 'error' => sprintf(
                     'Too many OTP requests. Please wait %d minutes and try again.',
-                    ceil($rate_check['reset_time'] / 60)
+                    ceil($retry_after / 60)
                 ),
             ];
         }
@@ -49,15 +55,17 @@ class OTPManager {
         // Check if OTP already exists and is still valid
         $existing = Security::get_otp_data($email);
         if ($existing) {
-            $resend_cooldown = 60; // 60 seconds between resends
             $elapsed = time() - $existing['created'];
             
             if ($elapsed < $resend_cooldown) {
+                $retry_after = max(1, $resend_cooldown - $elapsed);
                 return [
                     'success' => false,
+                    'error_code' => 'resend_cooldown',
+                    'retry_after' => $retry_after,
                     'error' => sprintf(
                         'Please wait %d seconds before requesting a new code.',
-                        $resend_cooldown - $elapsed
+                        $retry_after
                     ),
                 ];
             }
@@ -99,6 +107,7 @@ class OTPManager {
             'success' => true,
             'message' => 'Verification code sent to your email.',
             'expires_in' => $expiry * 60,
+            'resend_cooldown' => $resend_cooldown,
         ];
     }
     
@@ -205,30 +214,21 @@ class OTPManager {
      */
     private static function send_otp_email(string $email, string $otp, string $type): bool {
         $site_name = get_bloginfo('name');
-        $expiry = AuthSettings::get('otp_expiry_minutes', 10);
-        
-        switch ($type) {
-            case self::EMAIL_LOGIN:
-                $subject = sprintf('[%s] Your Login Code', $site_name);
-                $heading = 'Login Verification';
-                $message = 'Use the code below to log in to your account:';
-                break;
-            
-            case self::EMAIL_PASSWORD_RESET:
-                $subject = sprintf('[%s] Password Reset Code', $site_name);
-                $heading = 'Password Reset';
-                $message = 'Use the code below to reset your password:';
-                break;
-            
-            case self::EMAIL_VERIFICATION:
-            default:
-                $subject = sprintf('[%s] Verify Your Email', $site_name);
-                $heading = 'Email Verification';
-                $message = 'Use the code below to verify your email address:';
-                break;
+        $expiry = (int) AuthSettings::get('otp_expiry_minutes', 10);
+
+        $default_email = self::get_default_email_content($type, $site_name);
+        $subject = $default_email['subject'];
+        $html_content = self::get_email_template($otp, $default_email['heading'], $default_email['message'], $expiry);
+
+        // Use customized admin email templates when available.
+        $template_id = self::get_template_id_from_type($type);
+        $custom_template = SettingsController::get_saved_email_template($template_id);
+        if (is_array($custom_template) && !empty($custom_template['enabled'])) {
+            $replacements = self::get_email_replacements($email, $otp, $expiry);
+            $subject_template = $custom_template['header']['subject'] ?? $subject;
+            $subject = self::replace_template_variables((string) $subject_template, $replacements);
+            $html_content = SettingsController::build_email_html($custom_template, $replacements);
         }
-        
-        $html_content = self::get_email_template($otp, $heading, $message, $expiry);
         
         $headers = [
             'Content-Type: text/html; charset=UTF-8',
@@ -248,6 +248,93 @@ class OTPManager {
             $email_params['subject'],
             $email_params['message'],
             $email_params['headers']
+        );
+    }
+
+    /**
+     * Get default fallback email copy by OTP type.
+     */
+    private static function get_default_email_content(string $type, string $site_name): array {
+        switch ($type) {
+            case self::EMAIL_LOGIN:
+                return [
+                    'subject' => sprintf('[%s] Your Login Code', $site_name),
+                    'heading' => 'Login Verification',
+                    'message' => 'Use the code below to log in to your account:',
+                ];
+
+            case self::EMAIL_PASSWORD_RESET:
+                return [
+                    'subject' => sprintf('[%s] Password Reset Code', $site_name),
+                    'heading' => 'Password Reset',
+                    'message' => 'Use the code below to reset your password:',
+                ];
+
+            case self::EMAIL_VERIFICATION:
+            default:
+                return [
+                    'subject' => sprintf('[%s] Verify Your Email', $site_name),
+                    'heading' => 'Email Verification',
+                    'message' => 'Use the code below to verify your email address:',
+                ];
+        }
+    }
+
+    /**
+     * Map OTP email type to admin template ID.
+     */
+    private static function get_template_id_from_type(string $type): string {
+        switch ($type) {
+            case self::EMAIL_LOGIN:
+                return 'otp_login';
+
+            case self::EMAIL_PASSWORD_RESET:
+                return 'password_reset';
+
+            case self::EMAIL_VERIFICATION:
+            default:
+                return 'otp_verify';
+        }
+    }
+
+    /**
+     * Build replacement values for dynamic email templates.
+     */
+    private static function get_email_replacements(string $email, string $otp, int $expiry): array {
+        $site_name = get_bloginfo('name');
+        $user = get_user_by('email', $email);
+        $display_name = ($user && !empty($user->display_name))
+            ? $user->display_name
+            : strstr($email, '@', true);
+
+        if (empty($display_name)) {
+            $display_name = 'User';
+        }
+
+        return [
+            '{{user_name}}' => sanitize_text_field((string) $display_name),
+            '{{user_email}}' => sanitize_email($email),
+            '{{otp_code}}' => sanitize_text_field($otp),
+            '{{expires_in}}' => sprintf('%d minutes', $expiry),
+            '{{reset_link}}' => wp_lostpassword_url(),
+            '{{site_name}}' => sanitize_text_field($site_name),
+            '{{site_url}}' => home_url(),
+            '{{current_year}}' => gmdate('Y'),
+            '{{date_time}}' => current_time('mysql'),
+            '{{tournament_name}}' => '',
+            '{{tournament_date}}' => '',
+            '{{tournament_link}}' => home_url(),
+            '{{payment_link}}' => home_url(),
+            '{{payment_amount}}' => '',
+        ];
+    }
+
+    /**
+     * Replace supported template variables in text fields.
+     */
+    private static function replace_template_variables(string $content, array $replacements): string {
+        return sanitize_text_field(
+            str_replace(array_keys($replacements), array_values($replacements), $content)
         );
     }
     

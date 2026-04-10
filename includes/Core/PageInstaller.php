@@ -20,12 +20,22 @@ class PageInstaller {
      * Option name for storing page IDs
      */
     const PAGES_OPTION = 'battleledger_pages';
+
+    /**
+     * Option name for landing-page specific behavior
+     */
+    const LANDING_OPTION = 'battleledger_landing_options';
     
     /**
      * Default pages configuration
      */
     private static function get_pages_config(): array {
         return [
+            'landing' => [
+                'title' => __('Esports Landing', 'battle-ledger'),
+                'content' => '<!-- wp:shortcode -->[battleledger_landing]<!-- /wp:shortcode -->',
+                'option' => 'landing_page_id',
+            ],
             'login' => [
                 'title' => __('Login', 'battle-ledger'),
                 'content' => '<!-- wp:shortcode -->[battleledger_auth]<!-- /wp:shortcode -->',
@@ -145,6 +155,23 @@ class PageInstaller {
         $config = self::get_pages_config();
         
         if (isset($config[$key])) {
+            $previous_page_id = (int) ($pages[$config[$key]['option']] ?? 0);
+
+            // If landing page is currently used as homepage, keep front-page mapping in sync.
+            if ($key === 'landing') {
+                $show_on_front = get_option('show_on_front', 'posts');
+                $current_front_page = (int) get_option('page_on_front', 0);
+
+                if ($show_on_front === 'page' && $previous_page_id > 0 && $current_front_page === $previous_page_id) {
+                    if ($page_id > 0) {
+                        update_option('page_on_front', $page_id);
+                    } else {
+                        update_option('show_on_front', 'posts');
+                        update_option('page_on_front', 0);
+                    }
+                }
+            }
+
             $pages[$config[$key]['option']] = $page_id;
             return update_option(self::PAGES_OPTION, $pages);
         }
@@ -173,6 +200,95 @@ class PageInstaller {
         }
         
         return $result;
+    }
+
+    /**
+     * Get landing page options used in Authentication > Page Setup
+     */
+    public static function get_landing_options(): array {
+        $landing_page_id = self::get_page_id('landing');
+        $show_on_front = get_option('show_on_front', 'posts');
+        $page_on_front = (int) get_option('page_on_front', 0);
+
+        $saved = get_option(self::LANDING_OPTION, []);
+        if (!is_array($saved)) {
+            $saved = [];
+        }
+
+        $plugin_shell_only = array_key_exists('plugin_shell_only', $saved)
+            ? !empty($saved['plugin_shell_only'])
+            : true;
+
+        return [
+            'set_as_homepage' => $landing_page_id > 0 && $show_on_front === 'page' && $page_on_front === $landing_page_id,
+            'plugin_shell_only' => $plugin_shell_only,
+            'landing_page_id' => $landing_page_id,
+        ];
+    }
+
+    /**
+     * Update landing page options
+     */
+    public static function update_landing_options(array $options): array {
+        $landing_page_id = self::get_page_id('landing');
+        $set_as_homepage = !empty($options['set_as_homepage']);
+        $plugin_shell_only = !empty($options['plugin_shell_only']);
+
+        if ($set_as_homepage) {
+            if (!$landing_page_id || !get_post_status($landing_page_id)) {
+                return [
+                    'success' => false,
+                    'message' => __('Please select a valid Landing page first.', 'battle-ledger'),
+                    'options' => self::get_landing_options(),
+                ];
+            }
+
+            update_option('show_on_front', 'page');
+            update_option('page_on_front', $landing_page_id);
+
+            if ((int) get_option('page_for_posts', 0) === $landing_page_id) {
+                update_option('page_for_posts', 0);
+            }
+        } else {
+            $current_front_page = (int) get_option('page_on_front', 0);
+            if ($current_front_page === $landing_page_id) {
+                update_option('show_on_front', 'posts');
+                update_option('page_on_front', 0);
+            }
+        }
+
+        update_option(self::LANDING_OPTION, [
+            'plugin_shell_only' => $plugin_shell_only,
+        ]);
+
+        return [
+            'success' => true,
+            'message' => __('Landing page options updated.', 'battle-ledger'),
+            'options' => self::get_landing_options(),
+        ];
+    }
+
+    /**
+     * Whether landing page should use plugin shell template (no theme layout)
+     */
+    public static function is_landing_plugin_shell_enabled(): bool {
+        $saved = get_option(self::LANDING_OPTION, []);
+        if (!is_array($saved) || !array_key_exists('plugin_shell_only', $saved)) {
+            return true;
+        }
+
+        return !empty($saved['plugin_shell_only']);
+    }
+
+    /**
+     * Check if a page is the configured landing page
+     */
+    public static function is_landing_page(?int $page_id = null): bool {
+        if (!$page_id) {
+            $page_id = get_queried_object_id();
+        }
+
+        return $page_id > 0 && $page_id === self::get_page_id('landing');
     }
     
     /**
@@ -269,8 +385,13 @@ class PageInstaller {
      * Add page state labels in admin pages list (like WooCommerce does)
      */
     public static function add_page_states(array $post_states, \WP_Post $post): array {
+        $landing_page_id = self::get_page_id('landing');
         $login_page_id = self::get_page_id('login');
         $dashboard_page_id = self::get_page_id('dashboard');
+
+        if ($landing_page_id && $post->ID === $landing_page_id) {
+            $post_states['battleledger_landing_page'] = __('BattleLedger Landing Page', 'battle-ledger');
+        }
         
         if ($login_page_id && $post->ID === $login_page_id) {
             $post_states['battleledger_login_page'] = __('BattleLedger Login Page', 'battle-ledger');

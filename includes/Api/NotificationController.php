@@ -229,9 +229,21 @@ class NotificationController {
         global $wpdb;
         $table = $wpdb->prefix . 'bl_notifications';
 
-        $ids = $request->get_json_params()['ids'] ?? [];
+        $params  = $request->get_json_params();
+        $has_ids = is_array($params) && array_key_exists('ids', $params);
+        $ids     = $has_ids ? ($params['ids'] ?? []) : [];
         $ids = array_map('absint', (array) $ids);
         $ids = array_filter($ids);
+
+        // If no ids are provided, clear all admin-level notifications (user_id = 0).
+        if (!$has_ids) {
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM $table WHERE user_id = %d",
+                0
+            ));
+
+            return new \WP_REST_Response(['message' => 'All notifications cleared.']);
+        }
 
         if (empty($ids)) {
             return new \WP_REST_Response(['message' => 'No IDs provided.'], 400);

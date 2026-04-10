@@ -1,6 +1,8 @@
 <?php
 namespace BattleLedger\Frontend;
 
+use BattleLedger\Core\PageInstaller;
+
 /**
  * Template loader for frontend
  */
@@ -23,6 +25,21 @@ class TemplateLoader {
      * Load custom templates
      */
     public function template_loader($template) {
+        if (is_singular('page')) {
+            $current_page_id = get_queried_object_id();
+
+            if ($current_page_id
+                && PageInstaller::is_landing_plugin_shell_enabled()
+                && PageInstaller::is_battleledger_page((int) $current_page_id)
+            ) {
+                $landing_shell_template = BATTLE_LEDGER_PLUGIN_DIR . 'templates/landing-shell.php';
+
+                if (file_exists($landing_shell_template)) {
+                    return $landing_shell_template;
+                }
+            }
+        }
+
         // Check for custom post types or pages
         if (is_singular('bl_tournament')) {
             $custom_template = $this->locate_template('single-tournament.php');

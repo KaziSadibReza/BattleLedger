@@ -38,8 +38,18 @@ class PushController {
      * GET /push/vapid-key — return the VAPID public key.
      */
     public static function get_vapid_key() {
+        $public_key = PushNotificationManager::get_public_key();
+
+        if ($public_key === '') {
+            return new \WP_Error(
+                'bl_push_vapid_unavailable',
+                'Push notifications are currently unavailable. Server OpenSSL/VAPID key generation failed.',
+                ['status' => 500]
+            );
+        }
+
         return new \WP_REST_Response([
-            'publicKey' => PushNotificationManager::get_public_key(),
+            'publicKey' => $public_key,
         ]);
     }
 

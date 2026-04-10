@@ -37,6 +37,7 @@ class Shortcode {
             'popup' => 'false', // true = show as trigger button, false = inline
             'button_text' => 'Log In / Sign Up',
             'redirect' => '',
+            'dashboard_link' => '',
             'class' => '',
         ], $atts, 'battleledger_auth');
         
@@ -47,6 +48,7 @@ class Shortcode {
             'popup' => $atts['popup'] === 'true',
             'buttonText' => $atts['button_text'],
             'redirect' => $atts['redirect'] ?: self::get_form_redirect('loginRedirect', ''),
+            'dashboardLink' => $atts['dashboard_link'] ?: \BattleLedger\Core\PageInstaller::get_page_url('dashboard'),
             'className' => $atts['class'],
             'googleEnabled' => AuthSettings::is_google_configured(),
             'otpEnabled' => AuthSettings::is_otp_enabled(),
@@ -66,6 +68,7 @@ class Shortcode {
         
         return self::render_react_container($container_id, 'login', [
             'redirect' => $atts['redirect'] ?: self::get_form_redirect('loginRedirect', ''),
+            'dashboardLink' => \BattleLedger\Core\PageInstaller::get_page_url('dashboard'),
             'className' => $atts['class'],
             'googleEnabled' => AuthSettings::is_google_configured(),
             'otpEnabled' => AuthSettings::is_otp_enabled(),
@@ -85,6 +88,7 @@ class Shortcode {
         
         return self::render_react_container($container_id, 'signup', [
             'redirect' => $atts['redirect'] ?: self::get_form_redirect('registrationRedirect', ''),
+            'dashboardLink' => \BattleLedger\Core\PageInstaller::get_page_url('dashboard'),
             'className' => $atts['class'],
             'googleEnabled' => AuthSettings::is_google_configured(),
         ]);
@@ -184,12 +188,15 @@ class Shortcode {
         // Add current user data
         $user = wp_get_current_user();
         $google_picture = get_user_meta($user->ID, '_bl_google_picture', true);
+        $custom_avatar = get_user_meta($user->ID, '_bl_custom_avatar', true);
+        $display_name = !empty($user->display_name) ? $user->display_name : $user->user_login;
+        $avatar = $custom_avatar ?: ($google_picture ?: get_avatar_url($user->ID, ['size' => 200]));
         
         $props['currentUser'] = [
             'id' => $user->ID,
             'email' => $user->user_email,
-            'displayName' => $user->display_name,
-            'avatar' => $google_picture ?: get_avatar_url($user->ID, ['size' => 200]),
+            'displayName' => $display_name,
+            'avatar' => $avatar,
         ];
         
         $props['nonce'] = Security::create_nonce();
@@ -284,12 +291,15 @@ class Shortcode {
         if (is_user_logged_in()) {
             $user = wp_get_current_user();
             $google_picture = get_user_meta($user->ID, '_bl_google_picture', true);
+            $custom_avatar = get_user_meta($user->ID, '_bl_custom_avatar', true);
+            $display_name = !empty($user->display_name) ? $user->display_name : $user->user_login;
+            $avatar = $custom_avatar ?: ($google_picture ?: get_avatar_url($user->ID, ['size' => 96]));
             
             $props['currentUser'] = [
                 'id' => $user->ID,
                 'email' => $user->user_email,
-                'displayName' => $user->display_name,
-                'avatar' => $google_picture ?: get_avatar_url($user->ID, ['size' => 96]),
+                'displayName' => $display_name,
+                'avatar' => $avatar,
             ];
         }
         

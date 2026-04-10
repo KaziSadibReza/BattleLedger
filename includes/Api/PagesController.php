@@ -31,6 +31,30 @@ class PagesController {
             'callback' => [self::class, 'get_pages'],
             'permission_callback' => [self::class, 'check_admin_permission'],
         ]);
+
+        // Get landing page options
+        register_rest_route(self::NAMESPACE, '/pages/landing/options', [
+            'methods' => 'GET',
+            'callback' => [self::class, 'get_landing_options'],
+            'permission_callback' => [self::class, 'check_admin_permission'],
+        ]);
+
+        // Update landing page options
+        register_rest_route(self::NAMESPACE, '/pages/landing/options', [
+            'methods' => 'POST',
+            'callback' => [self::class, 'update_landing_options'],
+            'permission_callback' => [self::class, 'check_admin_permission'],
+            'args' => [
+                'set_as_homepage' => [
+                    'required' => false,
+                    'type' => 'boolean',
+                ],
+                'plugin_shell_only' => [
+                    'required' => false,
+                    'type' => 'boolean',
+                ],
+            ],
+        ]);
         
         // Recreate missing pages (register BEFORE the dynamic route)
         register_rest_route(self::NAMESPACE, '/pages/recreate', [
@@ -57,7 +81,7 @@ class PagesController {
                     'type' => 'string',
                     'validate_callback' => function($param) {
                         // Only allow specific page keys, not 'recreate' or 'available'
-                        return in_array($param, ['login', 'dashboard'], true);
+                        return in_array($param, ['landing', 'login', 'dashboard'], true);
                     }
                 ],
                 'page_id' => [
@@ -87,6 +111,38 @@ class PagesController {
             'success' => true,
             'pages' => $pages,
         ], 200);
+    }
+
+    /**
+     * Get landing page options
+     */
+    public static function get_landing_options(\WP_REST_Request $request): \WP_REST_Response {
+        require_once BATTLE_LEDGER_PLUGIN_DIR . 'includes/Core/PageInstaller.php';
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'options' => PageInstaller::get_landing_options(),
+        ], 200);
+    }
+
+    /**
+     * Update landing page options
+     */
+    public static function update_landing_options(\WP_REST_Request $request): \WP_REST_Response {
+        require_once BATTLE_LEDGER_PLUGIN_DIR . 'includes/Core/PageInstaller.php';
+
+        $payload = [
+            'set_as_homepage' => (bool) $request->get_param('set_as_homepage'),
+            'plugin_shell_only' => (bool) $request->get_param('plugin_shell_only'),
+        ];
+
+        $result = PageInstaller::update_landing_options($payload);
+
+        if (empty($result['success'])) {
+            return new \WP_REST_Response($result, 400);
+        }
+
+        return new \WP_REST_Response($result, 200);
     }
     
     /**

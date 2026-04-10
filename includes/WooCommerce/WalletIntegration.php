@@ -9,6 +9,7 @@
 
 namespace BattleLedger\WooCommerce;
 
+use BattleLedger\Api\SettingsController;
 use BattleLedger\Wallet\WalletManager;
 
 if (!defined('ABSPATH')) {
@@ -46,10 +47,121 @@ class WalletIntegration {
     public function register_hooks() {
         // Only credit wallet when order is marked as completed
         add_action('woocommerce_order_status_completed', [$this, 'process_wallet_deposit'], 10, 1);
+
+        // Keep pending deposit visibility in sync across non-completed states
+        add_action('woocommerce_order_status_pending', [$this, 'track_pending_wallet_deposit'], 10, 1);
+        add_action('woocommerce_order_status_on-hold', [$this, 'track_pending_wallet_deposit'], 10, 1);
+        add_action('woocommerce_order_status_processing', [$this, 'track_pending_wallet_deposit'], 10, 1);
+
+        // Handle terminal non-success statuses for wallet deposit orders
+        add_action('woocommerce_order_status_failed', [$this, 'handle_non_completed_wallet_deposit'], 10, 1);
+        add_action('woocommerce_order_status_cancelled', [$this, 'handle_non_completed_wallet_deposit'], 10, 1);
+        add_action('woocommerce_order_status_refunded', [$this, 'handle_non_completed_wallet_deposit'], 10, 1);
         
         // Protect against order deletion — log it if a credited deposit order is trashed/deleted
         add_action('woocommerce_before_trash_order', [$this, 'protect_deposit_order'], 10, 1);
         add_action('before_delete_post', [$this, 'protect_deposit_order'], 10, 1);
+    }
+
+    /**
+     * Ensure pending deposit entry exists while order is not completed yet.
+     */
+    public function track_pending_wallet_deposit($order_id) {
+        $order = wc_get_order($order_id);
+
+        if (!$order) {
+            return;
+        }
+
+        if ($order->get_meta('_is_wallet_deposit') !== 'yes') {
+            return;
+        }
+
+        if ($order->get_meta('_wallet_deposit_processed') === 'yes') {
+            return;
+        }
+
+        $user_id = (int) $order->get_meta('_wallet_user_id');
+        $amount = floatval($order->get_meta('_wallet_amount'));
+
+        if ($user_id <= 0 || $amount <= 0) {
+            return;
+        }
+
+        $status = (string) $order->get_status();
+        $payment_title = $order->get_payment_method_title() ?: 'WooCommerce';
+        $description = sprintf(
+            __('Pending deposit via %s (Order #%d)', 'battle-ledger'),
+            $payment_title,
+            $order_id
+        );
+
+        WalletManager::record_pending_deposit(
+            $user_id,
+            $amount,
+            $description,
+            $order_id
+        );
+
+        WalletManager::set_pending_deposit_status(
+            $order_id,
+            $status,
+            sprintf(
+                __('Deposit via %s (Order #%d) - %s', 'battle-ledger'),
+                $payment_title,
+                $order_id,
+                ucfirst(str_replace('-', ' ', $status))
+            )
+        );
+    }
+
+    /**
+     * Keep pending deposit record visible and mark status when order ends non-success.
+     */
+    public function handle_non_completed_wallet_deposit($order_id) {
+        $order = wc_get_order($order_id);
+
+        if (!$order) {
+            return;
+        }
+
+        if ($order->get_meta('_is_wallet_deposit') !== 'yes') {
+            return;
+        }
+
+        if ($order->get_meta('_wallet_deposit_processed') === 'yes') {
+            // Do not auto-reverse a completed wallet credit.
+            return;
+        }
+
+        $user_id = (int) $order->get_meta('_wallet_user_id');
+        $amount = floatval($order->get_meta('_wallet_amount'));
+
+        if ($user_id <= 0 || $amount <= 0) {
+            return;
+        }
+
+        $status = (string) $order->get_status();
+        $payment_title = $order->get_payment_method_title() ?: 'WooCommerce';
+        $description = sprintf(
+            __('Deposit via %s (Order #%d) - %s', 'battle-ledger'),
+            $payment_title,
+            $order_id,
+            ucfirst(str_replace('-', ' ', $status))
+        );
+
+        $updated = WalletManager::set_pending_deposit_status($order_id, $status, $description);
+        if (!$updated) {
+            WalletManager::record_pending_deposit($user_id, $amount, $description, $order_id);
+            WalletManager::set_pending_deposit_status($order_id, $status, $description);
+        }
+
+        \BattleLedger\Core\NotificationManager::user_deposit_status_update($user_id, $amount, $status);
+
+        $order->add_order_note(sprintf(
+            'Wallet deposit not credited because order status is now "%s".',
+            $order->get_status()
+        ));
     }
     
     /**
@@ -161,6 +273,19 @@ class WalletIntegration {
                     $payment_title,
                     $result['transaction_id']
                 ));
+
+                // Notify admin feed + user feed (also triggers push for the user feed)
+                $dep_user = get_userdata((int) $user_id);
+                \BattleLedger\Core\NotificationManager::wallet_deposit(
+                    $dep_user ? $dep_user->display_name : 'User #' . (int) $user_id,
+                    $amount,
+                    WalletManager::get_currency()
+                );
+                \BattleLedger\Core\NotificationManager::user_deposit_confirmed(
+                    (int) $user_id,
+                    $amount,
+                    WalletManager::get_currency()
+                );
                 
                 // Send email notification to customer
                 $this->send_deposit_confirmation_email($user_id, $amount, $order_id);
@@ -191,17 +316,54 @@ class WalletIntegration {
         if (!$user) {
             return;
         }
-        
-        $subject = 'Wallet Deposit Confirmed - BattleLedger';
-        $currency = \BattleLedger\Wallet\WalletManager::get_currency();
-        
-        $message = sprintf(
+
+        $dashboard_url = \BattleLedger\Core\PageInstaller::get_page_url('dashboard');
+        if (!$dashboard_url) {
+            $dashboard_url = home_url('/');
+        }
+
+        $user_name = !empty($user->display_name) ? $user->display_name : $user->user_login;
+        $amount_formatted = html_entity_decode(strip_tags(wc_price($amount)));
+
+        $replacements = [
+            '{{user_name}}' => $user_name,
+            '{{user_email}}' => $user->user_email,
+            '{{deposit_amount}}' => $amount_formatted,
+            '{{order_id}}' => (string) $order_id,
+            '{{wallet_url}}' => $dashboard_url,
+            '{{site_name}}' => get_bloginfo('name'),
+            '{{site_url}}' => home_url('/'),
+            '{{current_year}}' => gmdate('Y'),
+        ];
+
+        $template = SettingsController::get_email_template('wallet_deposit_confirmed');
+        if (is_array($template) && !empty($template['enabled'])) {
+            $subject = str_replace(
+                array_keys($replacements),
+                array_values($replacements),
+                $template['header']['subject'] ?? 'Wallet Deposit Confirmed - {{site_name}}'
+            );
+
+            $message = SettingsController::build_email_html($template, $replacements);
+
+            wp_mail(
+                $user->user_email,
+                $subject,
+                $message,
+                ['Content-Type: text/html; charset=UTF-8']
+            );
+            return;
+        }
+
+        // Fallback to plain text if template is disabled or unavailable.
+        $fallback_subject = str_replace('{{site_name}}', get_bloginfo('name'), 'Wallet Deposit Confirmed - {{site_name}}');
+        $fallback_message = sprintf(
             "Hello %s,\n\nYour wallet deposit has been successfully completed!\n\nAmount: %s\nOrder ID: #%d\n\nYou can now use these funds for tournament entries and other activities.\n\nThank you for using BattleLedger!",
-            $user->display_name,
-            html_entity_decode(strip_tags(wc_price($amount))),
+            $user_name,
+            $amount_formatted,
             $order_id
         );
-        
-        wp_mail($user->user_email, $subject, $message);
+
+        wp_mail($user->user_email, $fallback_subject, $fallback_message);
     }
 }

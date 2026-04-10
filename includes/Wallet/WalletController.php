@@ -8,6 +8,7 @@
 
 namespace BattleLedger\Wallet;
 
+use BattleLedger\Api\SettingsController;
 use BattleLedger\Api\RestController;
 
 if (!defined('ABSPATH')) {
@@ -497,6 +498,14 @@ class WalletController {
         ));
         
         $formatted = array_map(function($tx) {
+            $metadata = null;
+            if (!empty($tx->metadata)) {
+                $decoded_metadata = json_decode((string) $tx->metadata, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $metadata = $decoded_metadata;
+                }
+            }
+
             return [
                 'id' => (int) $tx->id,
                 'type' => $tx->type,
@@ -507,6 +516,7 @@ class WalletController {
                 'reference_type' => $tx->reference_type ?? null,
                 'reference_id' => $tx->reference_id ? (int) $tx->reference_id : null,
                 'created_by' => (int) $tx->created_by,
+                'metadata' => $metadata,
             ];
         }, $transactions);
         
@@ -650,17 +660,14 @@ class WalletController {
             $currency
         );
 
-        wp_mail(
+        self::send_new_withdrawal_request_email(
             $admin_email,
-            sprintf('BattleLedger: New Withdrawal Request #%d', $request_id),
-            sprintf(
-                "User: %s (ID: %d)\nAmount: %s %s\nMethod: %s\n\nPlease review in BattleLedger > Wallets > Withdrawals.",
-                $user->display_name,
-                $user_id,
-                number_format($amount, 2),
-                $currency,
-                $method['name']
-            )
+            $request_id,
+            $user,
+            $user_id,
+            $amount,
+            $method['name'],
+            $currency
         );
         
         return rest_ensure_response([
@@ -691,6 +698,75 @@ class WalletController {
         
         return floatval($total);
     }
+
+            /**
+             * Send admin email when a new withdrawal request is submitted.
+             */
+            private static function send_new_withdrawal_request_email(
+                string $admin_email,
+                int $request_id,
+                $user,
+                int $user_id,
+                float $amount,
+                string $method_name,
+                string $currency
+            ): void {
+                $user_name = ($user && !empty($user->display_name))
+                    ? $user->display_name
+                    : sprintf('User #%d', $user_id);
+
+                $user_email = ($user && !empty($user->user_email))
+                    ? $user->user_email
+                    : '';
+
+                $admin_panel_url = admin_url('admin.php?page=battleledger#/wallets');
+                $amount_display = number_format($amount, 2) . ' ' . $currency;
+
+                $replacements = [
+                    '{{request_id}}' => (string) $request_id,
+                    '{{user_name}}' => $user_name,
+                    '{{user_id}}' => (string) $user_id,
+                    '{{user_email}}' => $user_email,
+                    '{{withdrawal_amount}}' => $amount_display,
+                    '{{withdrawal_method}}' => $method_name,
+                    '{{admin_panel_url}}' => $admin_panel_url,
+                    '{{site_name}}' => get_bloginfo('name'),
+                    '{{site_url}}' => home_url('/'),
+                    '{{current_year}}' => gmdate('Y'),
+                ];
+
+                $template = SettingsController::get_email_template('withdrawal_request_admin');
+                if (is_array($template) && !empty($template['enabled'])) {
+                    $subject = str_replace(
+                        array_keys($replacements),
+                        array_values($replacements),
+                        $template['header']['subject'] ?? 'BattleLedger: New Withdrawal Request #{{request_id}}'
+                    );
+
+                    $message = SettingsController::build_email_html($template, $replacements);
+
+                    wp_mail(
+                        $admin_email,
+                        $subject,
+                        $message,
+                        ['Content-Type: text/html; charset=UTF-8']
+                    );
+                    return;
+                }
+
+                // Fallback plain text when template is unavailable.
+                wp_mail(
+                    $admin_email,
+                    sprintf('BattleLedger: New Withdrawal Request #%d', $request_id),
+                    sprintf(
+                        "User: %s (ID: %d)\nAmount: %s\nMethod: %s\n\nPlease review in BattleLedger > Wallets > Withdrawals.",
+                        $user_name,
+                        $user_id,
+                        $amount_display,
+                        $method_name
+                    )
+                );
+            }
     
     // ── Withdrawal Methods (Admin Settings) ──────────────────────────
     
@@ -878,6 +954,15 @@ class WalletController {
             WalletManager::get_currency()
         );
 
+        self::send_withdrawal_approved_email(
+            (int) $row->user_id,
+            $id,
+            floatval($row->amount),
+            (string) $row->method_name,
+            WalletManager::get_currency(),
+            $note
+        );
+
         return rest_ensure_response([
             'success' => true,
             'message' => __('Withdrawal approved. Funds have been deducted from user wallet.', 'battle-ledger'),
@@ -915,9 +1000,18 @@ class WalletController {
         ], ['id' => $id]);
 
         // Notify the user that their withdrawal was rejected
-        \BattleLedger\Core\NotificationManager::withdrawal_rejected(
+        \BattleLedger\Core\NotificationManager::withdrawal_cancelled_refunded(
             (int) $row->user_id,
             floatval($row->amount),
+            WalletManager::get_currency(),
+            $note
+        );
+
+        self::send_withdrawal_cancelled_email(
+            (int) $row->user_id,
+            $id,
+            floatval($row->amount),
+            (string) $row->method_name,
             WalletManager::get_currency(),
             $note
         );
@@ -930,5 +1024,146 @@ class WalletController {
             'message'     => __('Withdrawal request cancelled. The frozen amount has been released back to user.', 'battle-ledger'),
             'new_balance' => $wallet ? floatval($wallet->balance) : 0,
         ]);
+    }
+
+    /**
+     * Send user email when withdrawal is approved.
+     */
+    private static function send_withdrawal_approved_email(
+        int $user_id,
+        int $request_id,
+        float $amount,
+        string $method_name,
+        string $currency,
+        string $admin_note = ''
+    ): void {
+        $user = get_userdata($user_id);
+        if (!$user || empty($user->user_email)) {
+            return;
+        }
+
+        $dashboard_url = \BattleLedger\Core\PageInstaller::get_page_url('dashboard');
+        if (!$dashboard_url) {
+            $dashboard_url = home_url('/dashboard/?bl_tab=wallet');
+        }
+
+        $user_name = !empty($user->display_name) ? $user->display_name : $user->user_login;
+        $amount_display = number_format($amount, 2) . ' ' . $currency;
+        $note_display = trim($admin_note) !== '' ? $admin_note : __('No additional notes.', 'battle-ledger');
+
+        $replacements = [
+            '{{request_id}}' => (string) $request_id,
+            '{{user_name}}' => $user_name,
+            '{{user_email}}' => $user->user_email,
+            '{{withdrawal_amount}}' => $amount_display,
+            '{{withdrawal_method}}' => $method_name,
+            '{{wallet_url}}' => $dashboard_url,
+            '{{admin_note}}' => $note_display,
+            '{{site_name}}' => get_bloginfo('name'),
+            '{{site_url}}' => home_url('/'),
+            '{{current_year}}' => gmdate('Y'),
+        ];
+
+        $template = SettingsController::get_email_template('withdrawal_approved_user');
+        if (is_array($template) && !empty($template['enabled'])) {
+            $subject = str_replace(
+                array_keys($replacements),
+                array_values($replacements),
+                $template['header']['subject'] ?? 'Withdrawal Approved - {{withdrawal_amount}}'
+            );
+
+            $message = SettingsController::build_email_html($template, $replacements);
+
+            wp_mail(
+                $user->user_email,
+                $subject,
+                $message,
+                ['Content-Type: text/html; charset=UTF-8']
+            );
+            return;
+        }
+
+        wp_mail(
+            $user->user_email,
+            sprintf(__('Withdrawal Approved - %s', 'battle-ledger'), $amount_display),
+            sprintf(
+                "Hi %s,\n\nYour withdrawal request #%d has been approved.\nAmount: %s\nMethod: %s\n\nOur team is now processing your payout.",
+                $user_name,
+                $request_id,
+                $amount_display,
+                $method_name
+            )
+        );
+    }
+
+    /**
+     * Send user email when withdrawal is cancelled/refunded.
+     */
+    private static function send_withdrawal_cancelled_email(
+        int $user_id,
+        int $request_id,
+        float $amount,
+        string $method_name,
+        string $currency,
+        string $admin_note = ''
+    ): void {
+        $user = get_userdata($user_id);
+        if (!$user || empty($user->user_email)) {
+            return;
+        }
+
+        $dashboard_url = \BattleLedger\Core\PageInstaller::get_page_url('dashboard');
+        if (!$dashboard_url) {
+            $dashboard_url = home_url('/dashboard/?bl_tab=wallet');
+        }
+
+        $user_name = !empty($user->display_name) ? $user->display_name : $user->user_login;
+        $amount_display = number_format($amount, 2) . ' ' . $currency;
+        $note_display = trim($admin_note) !== '' ? $admin_note : __('No additional notes.', 'battle-ledger');
+
+        $replacements = [
+            '{{request_id}}' => (string) $request_id,
+            '{{user_name}}' => $user_name,
+            '{{user_email}}' => $user->user_email,
+            '{{withdrawal_amount}}' => $amount_display,
+            '{{withdrawal_method}}' => $method_name,
+            '{{wallet_url}}' => $dashboard_url,
+            '{{admin_note}}' => $note_display,
+            '{{site_name}}' => get_bloginfo('name'),
+            '{{site_url}}' => home_url('/'),
+            '{{current_year}}' => gmdate('Y'),
+        ];
+
+        $template = SettingsController::get_email_template('withdrawal_cancelled_user');
+        if (is_array($template) && !empty($template['enabled'])) {
+            $subject = str_replace(
+                array_keys($replacements),
+                array_values($replacements),
+                $template['header']['subject'] ?? 'Withdrawal Cancelled - {{withdrawal_amount}}'
+            );
+
+            $message = SettingsController::build_email_html($template, $replacements);
+
+            wp_mail(
+                $user->user_email,
+                $subject,
+                $message,
+                ['Content-Type: text/html; charset=UTF-8']
+            );
+            return;
+        }
+
+        wp_mail(
+            $user->user_email,
+            sprintf(__('Withdrawal Cancelled - %s', 'battle-ledger'), $amount_display),
+            sprintf(
+                "Hi %s,\n\nYour withdrawal request #%d was cancelled.\nAmount: %s\nMethod: %s\n\nThe amount remains available in your wallet.\n\nAdmin Note: %s",
+                $user_name,
+                $request_id,
+                $amount_display,
+                $method_name,
+                $note_display
+            )
+        );
     }
 }
