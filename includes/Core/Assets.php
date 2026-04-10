@@ -283,10 +283,13 @@ class Assets {
             
             // Register frontend auth bundle (check both old and new paths)
             $frontend_entry = null;
+            $frontend_entry_key = null;
             if (isset($manifest['src/frontend-auth-login/frontend.tsx'])) {
                 $frontend_entry = $manifest['src/frontend-auth-login/frontend.tsx'];
+                $frontend_entry_key = 'src/frontend-auth-login/frontend.tsx';
             } elseif (isset($manifest['src/AK/frontend.tsx'])) {
                 $frontend_entry = $manifest['src/AK/frontend.tsx'];
+                $frontend_entry_key = 'src/AK/frontend.tsx';
             }
             
             if ($frontend_entry) {
@@ -300,8 +303,13 @@ class Assets {
                     );
                 }
                 
-                if (isset($frontend_entry['css'])) {
-                    foreach ($frontend_entry['css'] as $index => $css_file) {
+                if ($frontend_entry_key) {
+                    $frontend_css_files = $this->collect_manifest_css_files(
+                        $manifest,
+                        $frontend_entry_key
+                    );
+
+                    foreach ($frontend_css_files as $index => $css_file) {
                         wp_register_style(
                             'battleledger-frontend' . ($index > 0 ? '-' . $index : ''),
                             BATTLE_LEDGER_ASSETS_URL . $css_file,
@@ -326,15 +334,18 @@ class Assets {
                     );
                 }
                 
-                if (isset($dashboard_entry['css'])) {
-                    foreach ($dashboard_entry['css'] as $index => $css_file) {
-                        wp_register_style(
-                            'battleledger-dashboard' . ($index > 0 ? '-' . $index : ''),
-                            BATTLE_LEDGER_ASSETS_URL . $css_file,
-                            [],
-                            BATTLE_LEDGER_VERSION
-                        );
-                    }
+                $dashboard_css_files = $this->collect_manifest_css_files(
+                    $manifest,
+                    'src/frontend-dashboard/frontend-dashboard.tsx'
+                );
+
+                foreach ($dashboard_css_files as $index => $css_file) {
+                    wp_register_style(
+                        'battleledger-dashboard' . ($index > 0 ? '-' . $index : ''),
+                        BATTLE_LEDGER_ASSETS_URL . $css_file,
+                        [],
+                        BATTLE_LEDGER_VERSION
+                    );
                 }
             }
 
@@ -410,15 +421,18 @@ class Assets {
                     );
                 }
 
-                if (isset($lt_entry['css'])) {
-                    foreach ($lt_entry['css'] as $index => $css_file) {
-                        wp_register_style(
-                            'battleledger-live-tournaments' . ($index > 0 ? '-' . $index : ''),
-                            BATTLE_LEDGER_ASSETS_URL . $css_file,
-                            [],
-                            BATTLE_LEDGER_VERSION
-                        );
-                    }
+                $live_tournaments_css_files = $this->collect_manifest_css_files(
+                    $manifest,
+                    'src/frontend-live-tournaments/frontend-live-tournaments.tsx'
+                );
+
+                foreach ($live_tournaments_css_files as $index => $css_file) {
+                    wp_register_style(
+                        'battleledger-live-tournaments' . ($index > 0 ? '-' . $index : ''),
+                        BATTLE_LEDGER_ASSETS_URL . $css_file,
+                        [],
+                        BATTLE_LEDGER_VERSION
+                    );
                 }
             }
         }

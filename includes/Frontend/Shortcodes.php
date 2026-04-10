@@ -165,6 +165,17 @@ class Shortcodes {
         wp_enqueue_script('battleledger-live-tournaments');
         wp_enqueue_style('battleledger-live-tournaments');
 
+        // Enqueue additional style handles registered from manifest imports
+        // (e.g. battleledger-live-tournaments-1, -2...) when CSS is split.
+        for ($index = 1; $index <= 20; $index++) {
+            $handle = 'battleledger-live-tournaments-' . $index;
+            if (!wp_style_is($handle, 'registered')) {
+                break;
+            }
+
+            wp_enqueue_style($handle);
+        }
+
         // Build props for the React app
         $login_url = '';
         if (!is_user_logged_in()) {
