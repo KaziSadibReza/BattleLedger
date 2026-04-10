@@ -574,6 +574,12 @@ class Assets {
             $manifest_args['icon'] = (string) $site_icon_id;
         }
 
+        $site_title = trim((string) get_option('blogname'));
+        if ($site_title !== '') {
+            // Refresh manifest URL when Site Title changes so install prompt metadata updates.
+            $manifest_args['title'] = substr(md5($site_title), 0, 10);
+        }
+
         $manifest_url = add_query_arg($manifest_args, home_url('/'));
 
         echo '<link rel="manifest" href="' . esc_url($manifest_url) . '" />' . "\n";
@@ -648,6 +654,25 @@ class Assets {
      */
     private function get_pwa_manifest_payload(): array {
         $landing_url = PageInstaller::get_page_url('landing') ?: home_url('/');
+        $site_name = trim((string) get_option('blogname'));
+        if ($site_name === '') {
+            $site_name = 'BattleLedger';
+        }
+
+        $short_name = $site_name;
+        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+            if (mb_strlen($short_name) > 12) {
+                $short_name = mb_substr($short_name, 0, 12);
+            }
+        } elseif (strlen($short_name) > 12) {
+            $short_name = substr($short_name, 0, 12);
+        }
+
+        $site_tagline = trim((string) get_option('blogdescription'));
+        $description = $site_tagline !== ''
+            ? $site_tagline
+            : 'Compete in tournaments and win real prizes.';
+
         $icons = [];
 
         $icon_192 = get_site_icon_url(192);
@@ -683,9 +708,9 @@ class Assets {
 
         return [
             'id' => trailingslashit($landing_url),
-            'name' => 'BattleLedger',
-            'short_name' => 'BattleLedger',
-            'description' => 'Compete in tournaments and win real prizes.',
+            'name' => $site_name,
+            'short_name' => $short_name,
+            'description' => $description,
             'start_url' => add_query_arg('source', 'pwa', $landing_url),
             'scope' => home_url('/'),
             'display' => 'standalone',
