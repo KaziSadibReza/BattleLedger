@@ -607,8 +607,13 @@ class Assets {
             header('Content-Type: application/javascript; charset=utf-8');
 
             $home_url = home_url('/');
+            $manifest_path = BATTLE_LEDGER_PLUGIN_DIR . 'assets/.vite/manifest.json';
+            $build_fingerprint = file_exists($manifest_path)
+                ? (string) filemtime($manifest_path)
+                : (string) BATTLE_LEDGER_VERSION;
+            $cache_name = 'battleledger-pwa-' . preg_replace('/[^a-zA-Z0-9_-]/', '', $build_fingerprint);
 
-            echo "const CACHE_NAME = 'battleledger-pwa-v2';\n";
+            echo "const CACHE_NAME = '" . esc_js($cache_name) . "';\n";
             echo "const OFFLINE_FALLBACK = '" . esc_js($home_url) . "';\n";
             echo "self.addEventListener('install', (event) => {\n";
             echo "  event.waitUntil((async () => {\n";
@@ -630,20 +635,8 @@ class Assets {
             echo "  if (requestUrl.origin !== self.location.origin) return;\n";
             echo "  if (requestUrl.searchParams.has('battleledger_pwa_manifest') || requestUrl.searchParams.has('battleledger_pwa_sw')) return;\n";
             echo "  if (requestUrl.pathname.includes('/wp-json/') || requestUrl.pathname.includes('admin-ajax.php')) return;\n";
-            echo "  if (event.request.mode === 'navigate') {\n";
-            echo "    event.respondWith(fetch(event.request).catch(async () => (await caches.match(OFFLINE_FALLBACK)) || Response.error()));\n";
-            echo "    return;\n";
-            echo "  }\n";
-            echo "  event.respondWith((async () => {\n";
-            echo "    const cached = await caches.match(event.request);\n";
-            echo "    if (cached) return cached;\n";
-            echo "    const response = await fetch(event.request);\n";
-            echo "    if (response && response.status === 200 && response.type === 'basic') {\n";
-            echo "      const cache = await caches.open(CACHE_NAME);\n";
-            echo "      cache.put(event.request, response.clone()).catch(() => null);\n";
-            echo "    }\n";
-            echo "    return response;\n";
-            echo "  })());\n";
+            echo "  if (event.request.mode !== 'navigate') return;\n";
+            echo "  event.respondWith(fetch(event.request).catch(async () => (await caches.match(OFFLINE_FALLBACK)) || Response.error()));\n";
             echo "});\n";
 
             exit;
