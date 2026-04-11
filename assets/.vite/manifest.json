@@ -1,10 +1,10 @@
 {
-  "_LandingApp-DsdTHNvW.js": {
-    "file": "js/LandingApp-DsdTHNvW.js",
+  "_LandingApp-CS7sryi8.js": {
+    "file": "js/LandingApp-CS7sryi8.js",
     "name": "LandingApp",
     "imports": [
       "_x-BCGXQ4kG.js",
-      "_index-6qv2nmR7.js",
+      "_index-D7SaPwz9.js",
       "_users-Cq0-CjSR.js",
       "_wallet-C_2jp0I3.js",
       "_user-plus-DHL9k5gW.js",
@@ -21,11 +21,11 @@
     ]
   },
   "_auth-!~{00c}~.js": {
-    "file": "css/auth.css",
+    "file": "css/auth-CfjDQGLe.css",
     "src": "_auth-!~{00c}~.js"
   },
-  "_auth-tnKAEzgi.js": {
-    "file": "js/auth-tnKAEzgi.js",
+  "_auth-CpYPPN3g.js": {
+    "file": "js/auth-CpYPPN3g.js",
     "name": "auth",
     "imports": [
       "_x-BCGXQ4kG.js",
@@ -38,7 +38,7 @@
       "_log-out-CNOGiEn_.js"
     ],
     "css": [
-      "css/auth.css"
+      "css/auth-CfjDQGLe.css"
     ]
   },
   "_circle-x-D-hl9_fL.js": {
@@ -56,11 +56,11 @@
     ]
   },
   "_dashboard-!~{00f}~.js": {
-    "file": "css/dashboard.css",
+    "file": "css/dashboard-BChvdX5A.css",
     "src": "_dashboard-!~{00f}~.js"
   },
-  "_dashboard-Cnvej5ct.js": {
-    "file": "js/dashboard-Cnvej5ct.js",
+  "_dashboard-4phPnoXy.js": {
+    "file": "js/dashboard-4phPnoXy.js",
     "name": "dashboard",
     "imports": [
       "_x-BCGXQ4kG.js",
@@ -76,21 +76,21 @@
       "_lock-Cica5eGv.js"
     ],
     "css": [
-      "css/dashboard.css"
+      "css/dashboard-BChvdX5A.css"
     ]
   },
   "_index-!~{00i}~.js": {
-    "file": "css/index.css",
+    "file": "css/index-MyPW9tsP.css",
     "src": "_index-!~{00i}~.js"
   },
-  "_index-6qv2nmR7.js": {
-    "file": "js/index-6qv2nmR7.js",
+  "_index-D7SaPwz9.js": {
+    "file": "js/index-D7SaPwz9.js",
     "name": "index",
     "imports": [
       "_x-BCGXQ4kG.js"
     ],
     "css": [
-      "css/index.css"
+      "css/index-MyPW9tsP.css"
     ]
   },
   "_key-BYrZ4xTs.js": {
@@ -101,11 +101,11 @@
     ]
   },
   "_live-tournaments-!~{00m}~.js": {
-    "file": "css/live-tournaments.css",
+    "file": "css/live-tournaments-C0wzUwET.css",
     "src": "_live-tournaments-!~{00m}~.js"
   },
-  "_live-tournaments-CEWK64CA.js": {
-    "file": "js/live-tournaments-CEWK64CA.js",
+  "_live-tournaments-D8SZCCbd.js": {
+    "file": "js/live-tournaments-D8SZCCbd.js",
     "name": "live-tournaments",
     "imports": [
       "_x-BCGXQ4kG.js",
@@ -119,7 +119,7 @@
       "_key-BYrZ4xTs.js"
     ],
     "css": [
-      "css/live-tournaments.css"
+      "css/live-tournaments-C0wzUwET.css"
     ]
   },
   "_lock-Cica5eGv.js": {
@@ -197,13 +197,13 @@
     "name": "x"
   },
   "src/frontend-auth-login/frontend.tsx": {
-    "file": "js/frontend-D1QAor-4.js",
+    "file": "js/frontend-CXFBbchM.js",
     "name": "frontend",
     "src": "src/frontend-auth-login/frontend.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_x-BCGXQ4kG.js",
-      "_auth-tnKAEzgi.js",
+      "_auth-CpYPPN3g.js",
       "_trending-up-CNCc5pGZ.js",
       "_lock-Cica5eGv.js",
       "_user-BjflmbYl.js",
@@ -214,14 +214,14 @@
     ]
   },
   "src/frontend-dashboard/frontend-dashboard.tsx": {
-    "file": "js/frontend-dashboard-CnT0JVCr.js",
+    "file": "js/frontend-dashboard-BnCpFj7D.js",
     "name": "frontend-dashboard",
     "src": "src/frontend-dashboard/frontend-dashboard.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_x-BCGXQ4kG.js",
       "_users-Cq0-CjSR.js",
-      "_dashboard-Cnvej5ct.js",
+      "_dashboard-4phPnoXy.js",
       "_log-out-CNOGiEn_.js",
       "_wallet-C_2jp0I3.js",
       "_user-BjflmbYl.js",
@@ -239,7 +239,7 @@
     "src": "src/frontend-landing-shell/frontend-landing-shell.tsx",
     "isEntry": true,
     "imports": [
-      "_index-6qv2nmR7.js",
+      "_index-D7SaPwz9.js",
       "_x-BCGXQ4kG.js"
     ],
     "dynamicImports": [
@@ -265,29 +265,29 @@
     "src": "src/frontend-landing/app/assets/hero-char4.png"
   },
   "src/frontend-landing/frontend-landing.tsx": {
-    "file": "js/frontend-landing-qc2HkcB6.js",
+    "file": "js/frontend-landing-DXYxtrpU.js",
     "name": "frontend-landing",
     "src": "src/frontend-landing/frontend-landing.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_x-BCGXQ4kG.js",
       "_users-Cq0-CjSR.js",
-      "_LandingApp-DsdTHNvW.js",
-      "_index-6qv2nmR7.js",
+      "_LandingApp-CS7sryi8.js",
+      "_index-D7SaPwz9.js",
       "_wallet-C_2jp0I3.js",
       "_user-plus-DHL9k5gW.js",
       "_user-BjflmbYl.js"
     ]
   },
   "src/frontend-live-tournaments/frontend-live-tournaments.tsx": {
-    "file": "js/frontend-live-tournaments-ByzfFjWN.js",
+    "file": "js/frontend-live-tournaments-GNV37U5n.js",
     "name": "frontend-live-tournaments",
     "src": "src/frontend-live-tournaments/frontend-live-tournaments.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_x-BCGXQ4kG.js",
       "_users-Cq0-CjSR.js",
-      "_live-tournaments-CEWK64CA.js",
+      "_live-tournaments-D8SZCCbd.js",
       "_search-Bhv3TYqB.js",
       "_currency-xP8s5HEY.js",
       "_shield-BRuykOp1.js",
@@ -316,7 +316,7 @@
       "_shield-BRuykOp1.js"
     ],
     "css": [
-      "css/main.css"
+      "css/main-Bs5K-gmg.css"
     ]
   }
 }

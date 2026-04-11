@@ -121,6 +121,7 @@ class Assets {
             }
             
             $manifest = json_decode(file_get_contents($manifest_path), true);
+            $build_version = (string) (filemtime($manifest_path) ?: BATTLE_LEDGER_VERSION);
             
             if (isset($manifest['src/main.tsx'])) {
                 $main_entry = $manifest['src/main.tsx'];
@@ -131,7 +132,7 @@ class Assets {
                         'battle-ledger-admin',
                         BATTLE_LEDGER_ASSETS_URL . $main_entry['file'],
                         ['wp-api-fetch'],
-                        BATTLE_LEDGER_VERSION,
+                        $build_version,
                         true
                     );
                     
@@ -158,7 +159,7 @@ class Assets {
                             'battle-ledger-admin',
                             BATTLE_LEDGER_ASSETS_URL . $css_file,
                             [],
-                            BATTLE_LEDGER_VERSION
+                            $build_version
                         );
                     }
                 }
@@ -280,6 +281,7 @@ class Assets {
             }
             
             $manifest = json_decode(file_get_contents($manifest_path), true);
+            $build_version = (string) (filemtime($manifest_path) ?: BATTLE_LEDGER_VERSION);
             
             // Register frontend auth bundle (check both old and new paths)
             $frontend_entry = null;
@@ -298,7 +300,7 @@ class Assets {
                         'battleledger-frontend',
                         BATTLE_LEDGER_ASSETS_URL . $frontend_entry['file'],
                         [],
-                        BATTLE_LEDGER_VERSION,
+                        $build_version,
                         true
                     );
                 }
@@ -314,7 +316,7 @@ class Assets {
                             'battleledger-frontend' . ($index > 0 ? '-' . $index : ''),
                             BATTLE_LEDGER_ASSETS_URL . $css_file,
                             [],
-                            BATTLE_LEDGER_VERSION
+                            $build_version
                         );
                     }
                 }
@@ -329,7 +331,7 @@ class Assets {
                         'battleledger-dashboard',
                         BATTLE_LEDGER_ASSETS_URL . $dashboard_entry['file'],
                         [],
-                        BATTLE_LEDGER_VERSION,
+                        $build_version,
                         true
                     );
                 }
@@ -344,7 +346,7 @@ class Assets {
                         'battleledger-dashboard' . ($index > 0 ? '-' . $index : ''),
                         BATTLE_LEDGER_ASSETS_URL . $css_file,
                         [],
-                        BATTLE_LEDGER_VERSION
+                        $build_version
                     );
                 }
             }
@@ -358,7 +360,7 @@ class Assets {
                         'battleledger-landing',
                         BATTLE_LEDGER_ASSETS_URL . $landing_entry['file'],
                         [],
-                        BATTLE_LEDGER_VERSION,
+                        $build_version,
                         true
                     );
                 }
@@ -373,7 +375,7 @@ class Assets {
                         'battleledger-landing' . ($index > 0 ? '-' . $index : ''),
                         BATTLE_LEDGER_ASSETS_URL . $css_file,
                         [],
-                        BATTLE_LEDGER_VERSION
+                        $build_version
                     );
                 }
             }
@@ -387,7 +389,7 @@ class Assets {
                         'battleledger-landing-shell',
                         BATTLE_LEDGER_ASSETS_URL . $landing_shell_entry['file'],
                         [],
-                        BATTLE_LEDGER_VERSION,
+                        $build_version,
                         true
                     );
                 }
@@ -402,7 +404,7 @@ class Assets {
                         'battleledger-landing-shell' . ($index > 0 ? '-' . $index : ''),
                         BATTLE_LEDGER_ASSETS_URL . $css_file,
                         [],
-                        BATTLE_LEDGER_VERSION
+                        $build_version
                     );
                 }
             }
@@ -416,7 +418,7 @@ class Assets {
                         'battleledger-live-tournaments',
                         BATTLE_LEDGER_ASSETS_URL . $lt_entry['file'],
                         [],
-                        BATTLE_LEDGER_VERSION,
+                        $build_version,
                         true
                     );
                 }
@@ -431,7 +433,7 @@ class Assets {
                         'battleledger-live-tournaments' . ($index > 0 ? '-' . $index : ''),
                         BATTLE_LEDGER_ASSETS_URL . $css_file,
                         [],
-                        BATTLE_LEDGER_VERSION
+                        $build_version
                     );
                 }
             }
