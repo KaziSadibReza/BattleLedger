@@ -317,8 +317,10 @@ class PublicTournamentController {
 
             // Expose room credentials only to joined users
             if ($joined) {
-                $tournament['room_id']       = $settings['room_id'] ?? '';
-                $tournament['room_password'] = $settings['room_password'] ?? '';
+                $room_id = trim((string) ($settings['room_id'] ?? ''));
+                $room_password = trim((string) ($settings['room_password'] ?? ''));
+                $tournament['room_id']       = $room_id !== '' ? $room_id : 'Loading';
+                $tournament['room_password'] = $room_password !== '' ? $room_password : 'Loading';
             }
         }
 

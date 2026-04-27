@@ -1,6 +1,7 @@
 <?php
 namespace BattleLedger\Api;
 
+use BattleLedger\Core\NotificationManager;
 use BattleLedger\Wallet\WalletManager;
 
 /**
@@ -544,16 +545,55 @@ class TournamentController {
         $participant_count = count($participants_snapshot);
 
         // ── Prize distribution ──────────────────────────────────
-        // Build a map: display_name → placement amount
+        // Build maps for payout and winner-facing reward labels.
         $prize_pool   = (float) $row->prize_pool;
         $prize_dist   = $tournament_settings['prize_distribution'] ?? [];
         $placement_map = []; // name → amount from placement
+        $reward_by_place = []; // place → formatted reward text
+
+        $allowed_reward_types = ['cash', 'diamond', 'uc', 'weekly', 'monthly', 'custom'];
+        $format_reward_label = static function (string $reward_type, float $amount, string $reward_value): string {
+            if ($reward_type === 'cash') {
+                return $amount > 0 ? sprintf('$%.2f', $amount) : '';
+            }
+            if ($reward_type === 'custom') {
+                return $reward_value !== '' ? $reward_value : 'Custom Reward';
+            }
+            if ($reward_type === 'diamond') {
+                return $reward_value !== '' ? sprintf('%s Diamond', $reward_value) : 'Diamond';
+            }
+            if ($reward_type === 'uc') {
+                return $reward_value !== '' ? sprintf('%s UC', $reward_value) : 'UC';
+            }
+            if ($reward_type === 'weekly') {
+                return $reward_value !== '' ? sprintf('Weekly %s', $reward_value) : 'Weekly Reward';
+            }
+            if ($reward_type === 'monthly') {
+                return $reward_value !== '' ? sprintf('Monthly %s', $reward_value) : 'Monthly Reward';
+            }
+            return $reward_value;
+        };
 
         if (!empty($prize_dist) && is_array($prize_dist)) {
             // Dynamic prize distribution configured by admin
             foreach ($prize_dist as $pd) {
                 $place  = (int) ($pd['place'] ?? 0);
+                $reward_type = sanitize_key($pd['reward_type'] ?? 'cash');
                 $amount = (float) ($pd['amount'] ?? 0);
+                $reward_value = sanitize_text_field((string) ($pd['reward_value'] ?? ''));
+                if (!in_array($reward_type, $allowed_reward_types, true)) {
+                    $reward_type = 'cash';
+                }
+
+                if ($place > 0) {
+                    $reward_label = $format_reward_label($reward_type, $amount, $reward_value);
+                    if ($reward_label !== '') {
+                        $reward_by_place[$place] = $reward_label;
+                    }
+                }
+
+                // Only cash rewards are credited to wallet. Non-cash rewards are informational.
+                if ($reward_type !== 'cash') continue;
                 if ($place <= 0 || $amount <= 0) continue;
 
                 // Resolve winner name for this placement
@@ -571,6 +611,7 @@ class TournamentController {
             // Legacy: 1st place gets entire prize pool
             if (!empty($winners_clean['first']) && $prize_pool > 0) {
                 $placement_map[$winners_clean['first']] = $prize_pool;
+                $reward_by_place[1] = sprintf('$%.2f', $prize_pool);
             }
         }
 
@@ -622,6 +663,90 @@ class TournamentController {
             }
         }
 
+        // Notify winners with placement and reward details (cash and non-cash).
+        $winner_places = [];
+        if (!empty($winners_clean['first'])) {
+            $winner_places[1] = $winners_clean['first'];
+        }
+        if (!empty($winners_clean['second'])) {
+            $winner_places[2] = $winners_clean['second'];
+        }
+        if (!empty($winners_clean['third'])) {
+            $winner_places[3] = $winners_clean['third'];
+        }
+        foreach ($winners_clean as $key => $name) {
+            if (preg_match('/^place_(\d+)$/', $key, $m) && !empty($name)) {
+                $winner_places[(int) $m[1]] = $name;
+            }
+        }
+        ksort($winner_places);
+
+        $participants_by_name = [];
+        foreach ($participants_snapshot as $participant_snapshot) {
+            $participant_name = (string) ($participant_snapshot['display_name'] ?? '');
+            $participant_user_id = (int) ($participant_snapshot['user_id'] ?? 0);
+            if ($participant_name === '' || $participant_user_id <= 0) {
+                continue;
+            }
+            if (!isset($participants_by_name[$participant_name])) {
+                $participants_by_name[$participant_name] = [];
+            }
+            $participants_by_name[$participant_name][] = $participant_user_id;
+        }
+
+        $ordinal = static function (int $n): string {
+            if ($n % 100 >= 11 && $n % 100 <= 13) {
+                return $n . 'th';
+            }
+            if ($n % 10 === 1) {
+                return $n . 'st';
+            }
+            if ($n % 10 === 2) {
+                return $n . 'nd';
+            }
+            if ($n % 10 === 3) {
+                return $n . 'rd';
+            }
+            return $n . 'th';
+        };
+
+        foreach ($winner_places as $place => $winner_name) {
+            if ($winner_name === '' || empty($participants_by_name[$winner_name])) {
+                continue;
+            }
+
+            $winner_user_id = (int) ($participants_by_name[$winner_name][0] ?? 0);
+            if ($winner_user_id <= 0) {
+                continue;
+            }
+            array_shift($participants_by_name[$winner_name]);
+
+            $placement_label = $ordinal((int) $place);
+            $reward_label = (string) ($reward_by_place[(int) $place] ?? '');
+            $message = sprintf(
+                'Congratulations! You finished %s in "%s".',
+                $placement_label,
+                $row->name
+            );
+            if ($reward_label !== '') {
+                $message .= sprintf(' Reward: %s.', $reward_label);
+            } else {
+                $message .= ' Results are now available in My Tournaments.';
+            }
+
+            NotificationManager::create('tournament', 'Tournament Result', $message, [
+                'user_id' => $winner_user_id,
+                'icon'    => 'trophy',
+                'link'    => '/dashboard/tournaments',
+                'metadata' => [
+                    'tournament_id' => $id,
+                    'place'         => (int) $place,
+                    'placement'     => $placement_label,
+                    'reward'        => $reward_label,
+                ],
+            ]);
+        }
+
         // Insert snapshot into finished-tournaments table
         $finished_table = $wpdb->prefix . 'bl_finished_tournaments';
         $wpdb->insert($finished_table, [
@@ -670,7 +795,7 @@ class TournamentController {
             'success'     => true,
             'finished_id' => $finished_id,
             'payouts'     => $payouts,
-            'message'     => __('Winners saved & prizes distributed. Tournament has been deactivated and reset for future use.', 'battle-ledger'),
+            'message'     => __('Winners saved. Cash prizes were distributed where configured. Tournament has been deactivated and reset for future use.', 'battle-ledger'),
         ]);
     }
 

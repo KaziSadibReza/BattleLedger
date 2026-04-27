@@ -233,11 +233,22 @@ class WalletPaymentController {
             // Fallback: credit wallet directly if WooCommerce is not available
             $user_id = get_current_user_id();
             $amount = floatval($request->get_param('amount'));
+            $min_deposit_amount = (float) get_option('battle_ledger_min_deposit_amount', 0);
             
             if ($amount <= 0) {
                 return new WP_REST_Response([
                     'success' => false,
                     'message' => 'Invalid amount',
+                ], 400);
+            }
+
+            if ($min_deposit_amount > 0 && $amount < $min_deposit_amount) {
+                return new WP_REST_Response([
+                    'success' => false,
+                    'message' => sprintf(
+                        __('Minimum deposit amount is %s.', 'battle-ledger'),
+                        $min_deposit_amount
+                    ),
                 ], 400);
             }
             
@@ -279,11 +290,22 @@ class WalletPaymentController {
         $user_id = get_current_user_id();
         $amount = floatval($request->get_param('amount'));
         $payment_method = sanitize_text_field($request->get_param('payment_method'));
+        $min_deposit_amount = (float) get_option('battle_ledger_min_deposit_amount', 0);
         
         if ($amount <= 0) {
             return new WP_REST_Response([
                 'success' => false,
                 'message' => 'Invalid amount',
+            ], 400);
+        }
+
+        if ($min_deposit_amount > 0 && $amount < $min_deposit_amount) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => sprintf(
+                    __('Minimum deposit amount is %s.', 'battle-ledger'),
+                    $min_deposit_amount
+                ),
             ], 400);
         }
         

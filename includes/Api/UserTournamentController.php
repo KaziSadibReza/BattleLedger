@@ -83,6 +83,9 @@ class UserTournamentController {
                     $status = 'awaiting_results';
                 }
 
+                $room_id = trim((string) ($settings['room_id'] ?? ''));
+                $room_password = trim((string) ($settings['room_password'] ?? ''));
+
                 $items[] = [
                     'id'                => (int) $r->id,
                     'type'              => 'active',
@@ -107,8 +110,8 @@ class UserTournamentController {
                         'team_mode'          => $settings['team_mode'] ?? '',
                         'prize_distribution' => $settings['prize_distribution'] ?? [],
                     ],
-                    'room_id'           => $settings['room_id'] ?? '',
-                    'room_password'     => $settings['room_password'] ?? '',
+                    'room_id'           => $room_id !== '' ? $room_id : 'Loading',
+                    'room_password'     => $room_password !== '' ? $room_password : 'Loading',
                     'winners'           => null,
                     'finished_at'       => null,
                 ];

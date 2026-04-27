@@ -534,11 +534,23 @@ class WalletController {
         
         $user_id   = get_current_user_id();
         $amount    = floatval($request->get_param('amount'));
+        $min_withdraw_amount = (float) get_option('battle_ledger_min_withdraw_amount', 0);
         $method_id = sanitize_text_field($request->get_param('method') ?? '');
         $details   = $request->get_param('details');
         
         if ($amount <= 0) {
             return new \WP_Error('invalid_amount', __('Invalid withdrawal amount', 'battle-ledger'), ['status' => 400]);
+        }
+
+        if ($min_withdraw_amount > 0 && $amount < $min_withdraw_amount) {
+            return new \WP_Error(
+                'min_withdraw_amount',
+                sprintf(
+                    __('Minimum withdrawal amount is %s.', 'battle-ledger'),
+                    $min_withdraw_amount
+                ),
+                ['status' => 400]
+            );
         }
         
         // Validate method exists in configured methods

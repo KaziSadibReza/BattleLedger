@@ -46,6 +46,8 @@ class AdminController {
             'enable_cache' => get_option('battle_ledger_enable_cache', true),
             'cache_duration' => get_option('battle_ledger_cache_duration', 3600),
             'enable_redis' => get_option('battle_ledger_enable_redis', false),
+            'min_deposit_amount' => (float) get_option('battle_ledger_min_deposit_amount', 0),
+            'min_withdraw_amount' => (float) get_option('battle_ledger_min_withdraw_amount', 0),
         ]);
     }
     
@@ -60,11 +62,18 @@ class AdminController {
             'enable_cache',
             'cache_duration',
             'enable_redis',
+            'min_deposit_amount',
+            'min_withdraw_amount',
         ];
         
         foreach ($allowed_settings as $setting) {
             if (isset($params[$setting])) {
-                update_option("battle_ledger_{$setting}", $params[$setting]);
+                // Ensure numeric values are stored as floats where appropriate
+                if (in_array($setting, ['min_deposit_amount', 'min_withdraw_amount'])) {
+                    update_option("battle_ledger_{$setting}", floatval($params[$setting]));
+                } else {
+                    update_option("battle_ledger_{$setting}", $params[$setting]);
+                }
             }
         }
         

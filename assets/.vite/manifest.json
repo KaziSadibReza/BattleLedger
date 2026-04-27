@@ -1,6 +1,6 @@
 {
-  "_LandingApp-CS7sryi8.js": {
-    "file": "js/LandingApp-CS7sryi8.js",
+  "_LandingApp-DH3YhYZW.js": {
+    "file": "js/LandingApp-DH3YhYZW.js",
     "name": "LandingApp",
     "imports": [
       "_x-BCGXQ4kG.js",
@@ -56,11 +56,11 @@
     ]
   },
   "_dashboard-!~{00f}~.js": {
-    "file": "css/dashboard-BChvdX5A.css",
+    "file": "css/dashboard-BE8UDt7n.css",
     "src": "_dashboard-!~{00f}~.js"
   },
-  "_dashboard-4phPnoXy.js": {
-    "file": "js/dashboard-4phPnoXy.js",
+  "_dashboard-BbpZr0qB.js": {
+    "file": "js/dashboard-BbpZr0qB.js",
     "name": "dashboard",
     "imports": [
       "_x-BCGXQ4kG.js",
@@ -76,7 +76,7 @@
       "_lock-Cica5eGv.js"
     ],
     "css": [
-      "css/dashboard-BChvdX5A.css"
+      "css/dashboard-BE8UDt7n.css"
     ]
   },
   "_index-!~{00i}~.js": {
@@ -101,11 +101,11 @@
     ]
   },
   "_live-tournaments-!~{00m}~.js": {
-    "file": "css/live-tournaments-C0wzUwET.css",
+    "file": "css/live-tournaments-DAHKPci5.css",
     "src": "_live-tournaments-!~{00m}~.js"
   },
-  "_live-tournaments-D8SZCCbd.js": {
-    "file": "js/live-tournaments-D8SZCCbd.js",
+  "_live-tournaments-BBCJZY8Q.js": {
+    "file": "js/live-tournaments-BBCJZY8Q.js",
     "name": "live-tournaments",
     "imports": [
       "_x-BCGXQ4kG.js",
@@ -119,7 +119,7 @@
       "_key-BYrZ4xTs.js"
     ],
     "css": [
-      "css/live-tournaments-C0wzUwET.css"
+      "css/live-tournaments-DAHKPci5.css"
     ]
   },
   "_lock-Cica5eGv.js": {
@@ -214,14 +214,14 @@
     ]
   },
   "src/frontend-dashboard/frontend-dashboard.tsx": {
-    "file": "js/frontend-dashboard-BnCpFj7D.js",
+    "file": "js/frontend-dashboard-D71aCYSR.js",
     "name": "frontend-dashboard",
     "src": "src/frontend-dashboard/frontend-dashboard.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_x-BCGXQ4kG.js",
       "_users-Cq0-CjSR.js",
-      "_dashboard-4phPnoXy.js",
+      "_dashboard-BbpZr0qB.js",
       "_log-out-CNOGiEn_.js",
       "_wallet-C_2jp0I3.js",
       "_user-BjflmbYl.js",
@@ -265,14 +265,14 @@
     "src": "src/frontend-landing/app/assets/hero-char4.png"
   },
   "src/frontend-landing/frontend-landing.tsx": {
-    "file": "js/frontend-landing-DXYxtrpU.js",
+    "file": "js/frontend-landing-CXsNpwCS.js",
     "name": "frontend-landing",
     "src": "src/frontend-landing/frontend-landing.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_x-BCGXQ4kG.js",
       "_users-Cq0-CjSR.js",
-      "_LandingApp-CS7sryi8.js",
+      "_LandingApp-DH3YhYZW.js",
       "_index-D7SaPwz9.js",
       "_wallet-C_2jp0I3.js",
       "_user-plus-DHL9k5gW.js",
@@ -280,14 +280,14 @@
     ]
   },
   "src/frontend-live-tournaments/frontend-live-tournaments.tsx": {
-    "file": "js/frontend-live-tournaments-GNV37U5n.js",
+    "file": "js/frontend-live-tournaments-qBAA0soB.js",
     "name": "frontend-live-tournaments",
     "src": "src/frontend-live-tournaments/frontend-live-tournaments.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_x-BCGXQ4kG.js",
       "_users-Cq0-CjSR.js",
-      "_live-tournaments-D8SZCCbd.js",
+      "_live-tournaments-BBCJZY8Q.js",
       "_search-Bhv3TYqB.js",
       "_currency-xP8s5HEY.js",
       "_shield-BRuykOp1.js",
@@ -316,7 +316,7 @@
       "_shield-BRuykOp1.js"
     ],
     "css": [
-      "css/main-Bs5K-gmg.css"
+      "css/main-CQv2nNys.css"
     ]
   }
 }
