@@ -163,6 +163,7 @@ class PublicTournamentController {
                 'winners'            => $settings['winners'] ?? null,
                 'prize_per_kill'     => (float) ($settings['prize_per_kill'] ?? 0),
                 'prize_distribution' => $settings['prize_distribution'] ?? [],
+                'banner'             => $settings['banner'] ?? '',
             ],
             'created_at'       => $row->created_at,
         ];
