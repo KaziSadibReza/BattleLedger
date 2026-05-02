@@ -1,6 +1,6 @@
 {
-  "_LandingApp-DlU2Xp1D.js": {
-    "file": "js/LandingApp-DlU2Xp1D.js",
+  "_LandingApp-Ce2jBzuM.js": {
+    "file": "js/LandingApp-Ce2jBzuM.js",
     "name": "LandingApp",
     "imports": [
       "_x-BCGXQ4kG.js",
@@ -101,11 +101,11 @@
     ]
   },
   "_live-tournaments-!~{00m}~.js": {
-    "file": "css/live-tournaments-DJmavXEP.css",
+    "file": "css/live-tournaments-BhsaOKnT.css",
     "src": "_live-tournaments-!~{00m}~.js"
   },
-  "_live-tournaments-wf3hg9km.js": {
-    "file": "js/live-tournaments-wf3hg9km.js",
+  "_live-tournaments-BZPFgMzb.js": {
+    "file": "js/live-tournaments-BZPFgMzb.js",
     "name": "live-tournaments",
     "imports": [
       "_x-BCGXQ4kG.js",
@@ -119,7 +119,7 @@
       "_key-BYrZ4xTs.js"
     ],
     "css": [
-      "css/live-tournaments-DJmavXEP.css"
+      "css/live-tournaments-BhsaOKnT.css"
     ]
   },
   "_lock-Cica5eGv.js": {
@@ -265,14 +265,14 @@
     "src": "src/frontend-landing/app/assets/hero-char4.png"
   },
   "src/frontend-landing/frontend-landing.tsx": {
-    "file": "js/frontend-landing-Dn63C_3F.js",
+    "file": "js/frontend-landing-By6OKC0y.js",
     "name": "frontend-landing",
     "src": "src/frontend-landing/frontend-landing.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_x-BCGXQ4kG.js",
       "_users-Cq0-CjSR.js",
-      "_LandingApp-DlU2Xp1D.js",
+      "_LandingApp-Ce2jBzuM.js",
       "_index-D7SaPwz9.js",
       "_wallet-C_2jp0I3.js",
       "_user-plus-DHL9k5gW.js",
@@ -280,14 +280,14 @@
     ]
   },
   "src/frontend-live-tournaments/frontend-live-tournaments.tsx": {
-    "file": "js/frontend-live-tournaments-BruWiaP4.js",
+    "file": "js/frontend-live-tournaments-BZGcbKhm.js",
     "name": "frontend-live-tournaments",
     "src": "src/frontend-live-tournaments/frontend-live-tournaments.tsx",
     "isDynamicEntry": true,
     "imports": [
       "_x-BCGXQ4kG.js",
       "_users-Cq0-CjSR.js",
-      "_live-tournaments-wf3hg9km.js",
+      "_live-tournaments-BZPFgMzb.js",
       "_search-Bhv3TYqB.js",
       "_currency-xP8s5HEY.js",
       "_shield-BRuykOp1.js",
